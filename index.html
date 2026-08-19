@@ -326,6 +326,8 @@
           <b id="meName"></b>
           <span id="meRole"></span>
         </div>
+        <button id="trainingBtn" role="menuitem">How to use the board</button>
+        <div class="sep"></div>
         <button id="exportBtn" role="menuitem">Export a backup</button>
         <button id="importBtn" role="menuitem">Import a backup</button>
         <div class="sep"></div>
@@ -1193,6 +1195,9 @@ function setMenu(open){
   userMenu.dataset.open = String(open);
   $('#meAvatar').setAttribute('aria-expanded', String(open));
 }
+$('#trainingBtn').addEventListener('click', ()=>{
+  window.open('/training/', '_blank', 'noopener');
+});
 $('#meAvatar').addEventListener('click', e=>{
   e.stopPropagation();
   setMenu(userMenu.dataset.open !== 'true');

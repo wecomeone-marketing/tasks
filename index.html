@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Wecomeone Task Board</title>
+<link rel="icon" href="https://wecomeone.me/wp-content/uploads/2024/10/cropped-wecomeone-logos-scaled-1-32x32.webp">
+<meta name="theme-color" content="#1a1a1a">
 <style>
   :root{
     --plane:#f9f9f7;
@@ -14,6 +16,8 @@
     --grid:#e1e0d9;
     --line:#c3c2b7;
     --ring:rgba(11,11,11,0.10);
+    --brand-ink:#1a1a1a;
+    --brand-mint:#44ffcf;
     --blue:#2a78d6;
     --blue-100:#cde2fb;
     --blue-250:#86b6ef;
@@ -35,14 +39,33 @@
     line-height:1.45;
   }
   button,input,select,textarea{font:inherit;color:inherit}
+  :focus-visible{outline:2px solid var(--brand-mint);outline-offset:2px}
   .wrap{max-width:1400px;margin:0 auto;padding:0 20px 60px}
 
   /* Top bar */
   header.top{
     position:sticky;top:0;z-index:40;
-    background:rgba(249,249,247,.92);
-    backdrop-filter:blur(8px);
-    border-bottom:1px solid var(--grid);
+    background:var(--brand-ink);
+    border-bottom:1px solid #000;
+  }
+  header.top .brand img{height:17px;width:auto;display:block}
+  header.top .brand strong{color:#fff;font-weight:600;font-size:14px;letter-spacing:0}
+  header.top .brand span{color:#8f8e89}
+  header.top .saved{color:#8f8e89}
+  header.top #meName{color:#e7e6e1}
+  header.top .btn{
+    background:transparent;border-color:rgba(255,255,255,.22);color:#e7e6e1;
+  }
+  header.top .btn:hover{background:rgba(255,255,255,.1);color:#fff}
+  header.top .btn.primary{
+    background:var(--brand-mint);border-color:var(--brand-mint);color:#0b0b0b;font-weight:600;
+  }
+  header.top .btn.primary:hover{background:#6bffd9;border-color:#6bffd9}
+  header.top .tabs{background:rgba(255,255,255,.1)}
+  header.top .tabs button{color:#c9c8c2}
+  header.top .tabs button:hover{color:#fff}
+  header.top .tabs button[aria-selected="true"]{
+    background:var(--brand-mint);color:#0b0b0b;box-shadow:none;font-weight:600;
   }
   .top-inner{max-width:1400px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
   .brand{display:flex;align-items:baseline;gap:10px;margin-right:auto}
@@ -60,13 +83,13 @@
     cursor:pointer;font-weight:500;
   }
   .btn:hover{background:#f2f1ec}
-  .btn.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
-  .btn.primary:hover{background:#292928}
+  .btn.primary{background:var(--brand-ink);color:#fff;border-color:var(--brand-ink)}
+  .btn.primary:hover{background:#000}
   .btn.danger{color:var(--critical);border-color:rgba(208,59,59,.3)}
   .btn.small{padding:4px 9px;font-size:12px;border-radius:6px}
   .who{display:flex;align-items:center;gap:8px}
   .avatar{
-    width:26px;height:26px;border-radius:999px;background:var(--blue-250);color:#0d366b;
+    width:26px;height:26px;border-radius:999px;background:var(--brand-mint);color:#0b3d31;
     display:grid;place-items:center;font-size:11px;font-weight:700;flex:none;
   }
   select.who-select{border:1px solid var(--ring);background:var(--surface);padding:6px 8px;border-radius:8px}
@@ -79,7 +102,7 @@
   .filters input[type=search]{min-width:230px}
   .toggle{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--ring);background:var(--surface);
     padding:6px 11px;border-radius:999px;cursor:pointer;user-select:none}
-  .toggle[data-on="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .toggle[data-on="true"]{background:var(--brand-ink);color:#fff;border-color:var(--brand-ink)}
   .spacer{flex:1}
   .count{color:var(--ink-muted);font-size:12px}
 
@@ -201,6 +224,7 @@
     .wrap{padding:0 12px 40px}
     .top-inner{padding:10px 12px;gap:10px}
     .brand span{display:none}
+    header.top .brand strong{display:none}
     .tabs{order:3;width:100%}
     .tabs button{flex:1}
     #exportBtn,#importBtn,.saved{display:none}
@@ -229,7 +253,9 @@
     td.taskcell{min-width:180px}
   }
 
-  .login{position:fixed;inset:0;z-index:100;background:var(--plane);display:grid;place-items:center;padding:20px}
+  .login{position:fixed;inset:0;z-index:100;background:var(--brand-ink);display:grid;place-items:center;
+    padding:20px;align-content:center;gap:22px}
+  .login .loginlogo{height:26px;width:auto}
   .login.hidden{display:none}
   .loginbox{background:var(--surface);border:1px solid var(--grid);border-radius:14px;padding:28px;width:min(380px,100%);box-shadow:var(--shadow)}
   .loginbox h1{font-size:20px;margin:0;letter-spacing:-.01em}
@@ -237,7 +263,7 @@
   .loginmsg{font-size:12.5px;margin:10px 0 0;min-height:16px;color:var(--critical)}
   .loginmsg.ok{color:#006300}
   .linky{background:none;border:0;padding:0;margin-top:10px;color:var(--ink-2);font-size:12.5px;text-decoration:underline;cursor:pointer}
-  .booting{position:fixed;inset:0;z-index:110;background:var(--plane);display:grid;place-items:center;color:var(--ink-muted);font-size:13px}
+  .booting{position:fixed;inset:0;z-index:110;background:var(--brand-ink);display:grid;place-items:center;color:#8f8e89;font-size:13px}
   .booting.hidden{display:none}
   .toast{
     position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);
@@ -253,8 +279,8 @@
 <header class="top">
   <div class="top-inner">
     <div class="brand">
+      <img src="https://wecomeone.me/wp-content/uploads/2023/12/1C1C1C-4-1-qls6dvx73eiontcsg4ah9l02u39jnrkyys1lxi4dfs.png" alt="wecomeone">
       <strong>Task Board</strong>
-      <span>Wecomeone Marketing And Comms</span>
     </div>
     <div class="tabs" role="tablist">
       <button role="tab" data-view="dashboard" aria-selected="true">Dashboard</button>
@@ -435,9 +461,10 @@
 </aside>
 
 <div class="login" id="login">
+  <img class="loginlogo" src="https://wecomeone.me/wp-content/uploads/2023/12/1C1C1C-4-1-qls6dvx73eiontcsg4ah9l02u39jnrkyys1lxi4dfs.png" alt="wecomeone">
   <form class="loginbox" id="loginForm">
     <h1>Task Board</h1>
-    <p class="sub">Wecomeone Marketing And Comms</p>
+    <p class="sub">Sign in to see your work</p>
     <div class="field">
       <label for="loginEmail">Email</label>
       <input id="loginEmail" type="email" autocomplete="username" required>
@@ -453,6 +480,7 @@
 </div>
 
 <div class="login hidden" id="setpw">
+  <img class="loginlogo" src="https://wecomeone.me/wp-content/uploads/2023/12/1C1C1C-4-1-qls6dvx73eiontcsg4ah9l02u39jnrkyys1lxi4dfs.png" alt="wecomeone">
   <form class="loginbox" id="setpwForm">
     <h1>Set your password</h1>
     <p class="sub">Choose a password for <span id="setpwEmail"></span></p>
@@ -722,10 +750,10 @@ function renderDashboard(rows){
     const od = mine.filter(isOverdue).length;
     return `<div class="rowbar">
       <span class="name">${esc(p)}</span>
-      <span class="track"><i style="background:#2a78d6;width:${(openN/maxOpen*100).toFixed(2)}%"></i></span>
+      <span class="track"><i style="background:#1a1a1a;width:${(openN/maxOpen*100).toFixed(2)}%"></i></span>
       <span class="num">${openN} open${od?` <span style="color:#a52c2c">${od} overdue</span>`:''}</span>
     </div>`;
-  }).join('') + `<div class="legend"><span><span class="dot" style="background:#2a78d6"></span>Open tasks</span></div>`
+  }).join('') + `<div class="legend"><span><span class="dot" style="background:#1a1a1a"></span>Open tasks</span></div>`
    : '<div class="empty">No tasks match the current filters.</div>';
 
   // Needs attention

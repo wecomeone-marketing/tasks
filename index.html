@@ -258,7 +258,7 @@
   <!-- BOARD -->
   <section id="view-board" class="hidden">
     <div class="board" id="board"></div>
-    <p class="note">Drag a card into another column to change its status. The date completed field fills in automatically when a task lands in Done.</p>
+    <p class="note">Drag a card into another column to change its status. The date completed field fills in automatically when a task lands in Completed, and typing a completed date sets the status for you.</p>
   </section>
 
   <!-- TABLE -->
@@ -429,7 +429,7 @@ const STATUSES = [
   { key:'in_progress', label:'In progress', color:'#2a78d6' },
   { key:'blocked',     label:'Blocked',     color:'#d03b3b' },
   { key:'review',      label:'Review',      color:'#fab219' },
-  { key:'done',        label:'Done',        color:'#0ca30c' }
+  { key:'done',        label:'Completed',   color:'#0ca30c' }
 ];
 const PRIORITIES = [
   { key:'low',    label:'Low',    color:'#898781' },
@@ -437,7 +437,7 @@ const PRIORITIES = [
   { key:'high',   label:'High',   color:'#ec835a' },
   { key:'urgent', label:'Urgent', color:'#d03b3b' }
 ];
-const TYPES = ['Content','Design','Paid ads','SEO','Web','Video','Social','Client admin','Strategy'];
+const TYPES = ['Branding','Content','Graphic Design','Paid ads','SEO','Social Media','Strategy','Video','Web Design'];
 
 let USERS = [];   // loaded from the profiles table after sign in
 
@@ -623,7 +623,7 @@ function renderDashboard(rows){
     return `<div class="rowbar">
       <span class="name" title="${esc(cl)}">${esc(cl)}</span>
       <span class="track">${segs}</span>
-      <span class="num">${done}/${total} done</span>
+      <span class="num">${done}/${total} completed</span>
     </div>`;
   }).join('') + `<div class="legend">${STATUSES.map(s=>`<span><span class="dot" style="background:${s.color}"></span>${s.label}</span>`).join('')}</div>`
    : '<div class="empty">No tasks match the current filters.</div>';
@@ -667,7 +667,7 @@ function cardHTML(t){
     else if(dtd<=3){ dueCls='due-soon'; dueTxt = dtd===0 ? 'Due today' : 'Due in ' + dtd + 'd'; }
     else dueTxt = 'Due ' + fmtDate(t.due_date);
   } else if(t.date_completed){
-    dueTxt = 'Done ' + fmtDate(t.date_completed);
+    dueTxt = 'Completed ' + fmtDate(t.date_completed);
   }
   const nComments = (t.comments||[]).length;
   return `<div class="card" draggable="true" data-id="${t.id}">
@@ -786,8 +786,16 @@ async function saveTask(){
     notes: $('#fld-notes').value.trim()
   };
   if(!payload.title){ toast('Give the task a name'); return; }
-  if(payload.status==='done' && !payload.date_completed) payload.date_completed = todayISO();
-  if(payload.status!=='done') payload.date_completed = '';
+
+  // A date in the Completed field means the task is completed, whatever the dropdown says.
+  const prevCompleted = EDITING ? (EDITING.date_completed || '') : '';
+  if(payload.date_completed && payload.date_completed !== prevCompleted){
+    payload.status = 'done';
+  } else if(payload.status === 'done'){
+    if(!payload.date_completed) payload.date_completed = todayISO();
+  } else {
+    payload.date_completed = '';
+  }
   if(payload.status!=='not_started' && !payload.date_started) payload.date_started = todayISO();
 
   if(EDITING){
@@ -1003,6 +1011,14 @@ $('#addCommentBtn').addEventListener('click', async ()=>{
   $('#newComment').value='';
   renderComments(EDITING);
   render();
+});
+// typing a completed date flips the status dropdown there and then
+$('#fld-completed').addEventListener('change', e=>{
+  if(e.target.value) $('#fld-status').value = 'done';
+});
+$('#fld-status').addEventListener('change', e=>{
+  if(e.target.value !== 'done') $('#fld-completed').value = '';
+  else if(!$('#fld-completed').value) $('#fld-completed').value = todayISO();
 });
 $('#q').addEventListener('input', e=>{ F.q=e.target.value; render(); });
 ['fClient','fAssignee','fStatus','fPriority','fType'].forEach(id=>{

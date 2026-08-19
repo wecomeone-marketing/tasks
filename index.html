@@ -285,6 +285,31 @@
   .linky{background:none;border:0;padding:0;margin-top:10px;color:var(--ink-2);font-size:12.5px;text-decoration:underline;cursor:pointer}
   .booting{position:fixed;inset:0;z-index:110;background:var(--brand-ink);display:grid;place-items:center;color:#8f8e89;font-size:13px}
   .booting.hidden{display:none}
+  /* guided tour */
+  .tour{position:fixed;inset:0;z-index:200;display:none;pointer-events:none}
+  .tour[data-open="true"]{display:block}
+  .tmask{position:fixed;background:rgba(11,11,11,.62);pointer-events:auto}
+  .tring{position:fixed;border:2px solid var(--brand-mint);border-radius:10px;
+    box-shadow:0 0 0 4px rgba(68,255,207,.22);pointer-events:none;transition:all .18s ease}
+  .tring.hidden{display:none}
+  .tpop{
+    position:fixed;z-index:210;width:min(330px,calc(100vw - 24px));background:var(--surface);
+    color:var(--ink);border:1px solid var(--grid);border-radius:12px;padding:16px 18px 14px;
+    box-shadow:0 10px 30px rgba(11,11,11,.28);pointer-events:auto;
+  }
+  .tpop .tstep{margin:0 0 6px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-muted)}
+  .tpop h3{margin:0 0 8px;font-size:16px;letter-spacing:-.01em}
+  .tpop p{margin:0 0 10px;font-size:13.5px;line-height:1.55;color:var(--ink-2)}
+  .tpop p:last-of-type{margin-bottom:0}
+  .tpop b{color:var(--ink)}
+  .tpop .trow{display:flex;align-items:center;gap:8px;margin-top:14px}
+  .tpop .tskip{background:none;border:0;padding:4px 2px;color:var(--ink-muted);cursor:pointer;font-size:12.5px;
+    text-decoration:underline}
+  .tpop .tskip:hover{color:var(--ink-2)}
+  @media(max-width:640px){
+    .tpop{width:calc(100vw - 20px);left:10px !important}
+  }
+
   .confirm{position:fixed;inset:0;z-index:120;background:rgba(11,11,11,.45);display:none;
     place-items:center;padding:20px}
   .confirm[data-open="true"]{display:grid}
@@ -326,7 +351,7 @@
           <b id="meName"></b>
           <span id="meRole"></span>
         </div>
-        <button id="trainingBtn" role="menuitem">How to use the board</button>
+        <button id="guideBtn" role="menuitem">Run the guide</button>
         <div class="sep"></div>
         <button id="exportBtn" role="menuitem">Export a backup</button>
         <button id="importBtn" role="menuitem">Import a backup</button>
@@ -541,6 +566,25 @@
     <button class="btn primary" type="submit" id="setpwBtn" style="width:100%">Save password and open the board</button>
     <p class="loginmsg" id="setpwMsg"></p>
   </form>
+</div>
+
+<div class="tour" id="tour" aria-live="polite">
+  <div class="tmask" data-side="top"></div>
+  <div class="tmask" data-side="bottom"></div>
+  <div class="tmask" data-side="left"></div>
+  <div class="tmask" data-side="right"></div>
+  <div class="tring" id="tourRing"></div>
+  <div class="tpop" id="tourPop" role="dialog" aria-modal="false">
+    <p class="tstep" id="tourStep"></p>
+    <h3 id="tourTitle"></h3>
+    <div id="tourBody"></div>
+    <div class="trow">
+      <button class="tskip" id="tourSkip">Skip</button>
+      <span style="flex:1"></span>
+      <button class="btn small" id="tourBack">Back</button>
+      <button class="btn primary small" id="tourNext">Next</button>
+    </div>
+  </div>
 </div>
 
 <div class="confirm" id="confirmDelete">
@@ -1135,6 +1179,7 @@ async function init(){
 
   $('#booting').classList.add('hidden');
   $('#login').classList.add('hidden');
+  maybeStartTour();
 }
 
 /* refresh when the tab regains focus, and every 60 seconds, so the
@@ -1195,9 +1240,6 @@ function setMenu(open){
   userMenu.dataset.open = String(open);
   $('#meAvatar').setAttribute('aria-expanded', String(open));
 }
-$('#trainingBtn').addEventListener('click', ()=>{
-  window.open('/training/', '_blank', 'noopener');
-});
 $('#meAvatar').addEventListener('click', e=>{
   e.stopPropagation();
   setMenu(userMenu.dataset.open !== 'true');
@@ -1256,6 +1298,189 @@ $('#setpwForm').addEventListener('submit', async e=>{
     showLogin();
   }
 })();
+
+
+/* ============================================================
+   10. THE GUIDE
+   A walk around the board, anchored to the real thing rather than
+   screenshots. Steps whose target has gone are skipped rather than
+   left pointing at nothing.
+   ============================================================ */
+let TOUR_AT = 0, TOUR_ON = false, PRACTICE = false;
+
+const STEPS = [
+  { title:'Welcome to the board',
+    body:`<p>Two minutes, twelve stops. It points at the real thing as we go.</p>
+          <p>Leave any time with <b>Skip</b>. You can run this again from your avatar menu.</p>`,
+    center:true },
+
+  { el:'.tabs', view:'dashboard', place:'below',
+    title:'Three ways to look',
+    body:`<p><b>Dashboard</b> is the morning read. <b>Board</b> is where you work. <b>Table</b> is every field at once.</p>
+          <p>Same tasks underneath. Only the view changes.</p>` },
+
+  { el:'.filters', view:'dashboard', place:'below',
+    title:'One filter bar for all three',
+    body:`<p>Filter to a client here and it stays filtered as you switch views.</p>
+          <p><b>My tasks</b> narrows to yours. <b>Overdue only</b> shows the fires.</p>` },
+
+  { el:'#kpis', view:'dashboard', place:'below',
+    title:'The numbers that matter',
+    body:`<p>Open work, what is moving, what is stuck, what is late, and what is parked with someone outside the team.</p>` },
+
+  { el:'#attention', view:'dashboard', place:'above',
+    title:'Needs attention',
+    body:`<p>The only panel that asks something of you. Anything overdue, blocked, urgent, or sitting too long with someone else lands here.</p>
+          <p>If this is empty, you are in good shape.</p>` },
+
+  { el:'#board', view:'board', place:'below',
+    title:'Six columns, six meanings',
+    body:`<p>The one people get wrong: <b>In progress means us. Waiting means them.</b></p>
+          <p>If a contractor or a client has it, that is Waiting, and the board starts counting the days.</p>` },
+
+  { el:'#board .card', view:'board', place:'right',
+    title:'What a card tells you',
+    body:`<p>Client, task, who owns it, priority, when it is due, how many notes and links.</p>
+          <p>Drag it to another column to move it along. On a phone, use the dropdown on the card.</p>` },
+
+  { el:'#quickAdd', view:'board', place:'below', practice:true,
+    title:'Try adding one',
+    body:`<p>Type a task and press <b>Enter</b>. Nothing is saved while the guide is running, so use anything.</p>
+          <p>Four seconds beats thirty. Fill in the detail later, or never.</p>` },
+
+  { el:'#newTaskBtn', view:'board', place:'below',
+    title:'Or the full panel',
+    body:`<p>For real detail. Brief, due date, links to the drive folder, and the comment thread.</p>
+          <p>Comment here rather than on WhatsApp. In six weeks the reasoning sits with the task.</p>` },
+
+  { el:'#tbl', view:'table', place:'below',
+    title:'Everything at once',
+    body:`<p>Every field, sortable by any column. Best for a client by client sweep before a call.</p>` },
+
+  { el:'#meAvatar', view:'dashboard', place:'left', openMenu:true,
+    title:'Your account',
+    body:`<p>Sign out, take a backup, and run this guide again whenever you want.</p>` },
+
+  { title:'Two rules and you are done',
+    body:`<p><b>If work is not on the board, it does not exist.</b> Including the small stuff.</p>
+          <p><b>Keep it current.</b> A board updated once a week is worse than no board, because people trust it and it is wrong.</p>`,
+    center:true, last:true }
+];
+
+const tour = $('#tour');
+const tpop = $('#tourPop');
+const tring = $('#tourRing');
+
+function tourTarget(step){
+  if(step.center || !step.el) return null;
+  const el = document.querySelector(step.el);
+  return (el && el.getBoundingClientRect().width > 0) ? el : null;
+}
+
+function place(step){
+  const el = tourTarget(step);
+  const pad = 8, gap = 14;
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const masks = $$('.tmask');
+
+  if(!el){
+    tring.classList.add('hidden');
+    masks.forEach(m=>{ m.style.cssText = m.dataset.side==='top'
+      ? 'inset:0' : 'display:none'; });
+    tpop.style.left = Math.max(12, (vw - tpop.offsetWidth)/2) + 'px';
+    tpop.style.top  = Math.max(12, (vh - tpop.offsetHeight)/2) + 'px';
+    return;
+  }
+
+  const r = el.getBoundingClientRect();
+  const box = { top:r.top-pad, left:r.left-pad, w:r.width+pad*2, h:r.height+pad*2 };
+
+  tring.classList.remove('hidden');
+  tring.style.top = box.top+'px'; tring.style.left = box.left+'px';
+  tring.style.width = box.w+'px'; tring.style.height = box.h+'px';
+
+  const set = (m,css)=>{ m.style.display='block'; m.style.cssText += ';' + css; };
+  masks.forEach(m=>m.style.cssText='');
+  set(masks[0], `top:0;left:0;width:100vw;height:${Math.max(0,box.top)}px`);
+  set(masks[1], `top:${box.top+box.h}px;left:0;width:100vw;height:${Math.max(0,vh-box.top-box.h)}px`);
+  set(masks[2], `top:${box.top}px;left:0;width:${Math.max(0,box.left)}px;height:${box.h}px`);
+  set(masks[3], `top:${box.top}px;left:${box.left+box.w}px;width:${Math.max(0,vw-box.left-box.w)}px;height:${box.h}px`);
+
+  const pw = tpop.offsetWidth, ph = tpop.offsetHeight;
+  let top, left;
+  const below = box.top + box.h + gap, above = box.top - ph - gap;
+
+  if(step.place === 'left' && box.left - pw - gap > 12){
+    left = box.left - pw - gap; top = box.top;
+  } else if(step.place === 'right' && box.left + box.w + pw + gap < vw - 12){
+    left = box.left + box.w + gap; top = box.top;
+  } else if(step.place === 'above' && above > 12){
+    top = above; left = box.left;
+  } else if(below + ph < vh - 12){
+    top = below; left = box.left;
+  } else if(above > 12){
+    top = above; left = box.left;
+  } else {
+    top = Math.max(12, (vh - ph)/2); left = box.left;
+  }
+  tpop.style.top  = Math.max(12, Math.min(top,  vh - ph - 12)) + 'px';
+  tpop.style.left = Math.max(12, Math.min(left, vw - pw - 12)) + 'px';
+}
+
+async function showStep(i){
+  TOUR_AT = Math.max(0, Math.min(STEPS.length - 1, i));
+  const step = STEPS[TOUR_AT];
+
+  setMenu(false);
+  if(step.view && VIEW !== step.view) switchView(step.view);
+  if(step.openMenu) setMenu(true);
+  PRACTICE = !!step.practice;
+
+  $('#tourStep').textContent = 'Step ' + (TOUR_AT + 1) + ' of ' + STEPS.length;
+  $('#tourTitle').textContent = step.title;
+  $('#tourBody').innerHTML = step.body;
+  $('#tourBack').style.visibility = TOUR_AT === 0 ? 'hidden' : 'visible';
+  $('#tourNext').textContent = step.last ? 'Finish' : 'Next';
+
+  const el = tourTarget(step);
+  if(el) el.scrollIntoView({ block:'center', behavior:'smooth' });
+  await new Promise(r=>setTimeout(r, el ? 260 : 20));
+  place(step);
+}
+
+function startTour(){
+  TOUR_ON = true;
+  tour.dataset.open = 'true';
+  showStep(0);
+}
+function endTour(){
+  TOUR_ON = false;
+  PRACTICE = false;
+  tour.dataset.open = 'false';
+  setMenu(false);
+  try { localStorage.setItem('wco_guide_' + (ME ? ME.id : 'x'), 'done'); } catch(e){}
+}
+
+$('#tourNext').addEventListener('click', ()=>{
+  if(STEPS[TOUR_AT].last) return endTour();
+  showStep(TOUR_AT + 1);
+});
+$('#tourBack').addEventListener('click', ()=>showStep(TOUR_AT - 1));
+$('#tourSkip').addEventListener('click', endTour);
+$('#guideBtn').addEventListener('click', ()=>{ setMenu(false); startTour(); });
+window.addEventListener('resize', ()=>{ if(TOUR_ON) place(STEPS[TOUR_AT]); });
+document.addEventListener('keydown', e=>{
+  if(!TOUR_ON) return;
+  if(e.key === 'Escape'){ e.preventDefault(); endTour(); }
+  if(e.key === 'ArrowRight'){ e.preventDefault(); if(!STEPS[TOUR_AT].last) showStep(TOUR_AT+1); }
+  if(e.key === 'ArrowLeft'){ e.preventDefault(); showStep(TOUR_AT-1); }
+});
+
+function maybeStartTour(){
+  try {
+    if(!localStorage.getItem('wco_guide_' + ME.id)) setTimeout(startTour, 700);
+  } catch(e){}
+}
 
 // events
 $$('.tabs button').forEach(b=>b.addEventListener('click', ()=>switchView(b.dataset.view)));
@@ -1317,6 +1542,11 @@ $('#q').addEventListener('input', e=>{ F.q=e.target.value; render(); });
 async function quickAdd(){
   const title = $('#qaTitle').value.trim();
   if(!title){ $('#qaTitle').focus(); return; }
+  if(PRACTICE){
+    $('#qaTitle').value = '';
+    toast('Practice run, nothing was saved');
+    return;
+  }
   const t = await Store.create({
     title,
     client: $('#qaClient').value.trim(),

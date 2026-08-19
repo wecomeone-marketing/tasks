@@ -4,6 +4,7 @@
 // Handles four jobs:
 //   1. a task is created            -> email the assignee
 //   2. a task is reassigned         -> email the new assignee
+//   2b. a task moves into Review     -> email the admins, it is waiting on them
 //   3. a comment is posted          -> email the task assignee
 //   4. a daily run each morning     -> email assignee and admins about tasks due today
 //
@@ -170,6 +171,28 @@ async function onTaskReassigned(task: Record<string, unknown>) {
   return `sent to ${who.email}`;
 }
 
+async function onMovedToReview(task: Record<string, unknown>, actor: string | null) {
+  const who = await profile(task.assignee as string | null);
+  const mover = await profile(actor);
+  const sent: string[] = [];
+
+  for (const admin of await admins()) {
+    if (!admin.email) continue;
+    if (admin.id === actor) continue;           // you moved it yourself, you know
+    await send(
+      admin.email,
+      `Ready for review: ${task.title}`,
+      shell(
+        "A task is waiting on you",
+        `${esc(mover?.full_name ?? who?.full_name ?? "Someone")} moved this into Review.`,
+        taskCard(task),
+      ),
+    );
+    sent.push(admin.email);
+  }
+  return sent.length ? `sent to ${sent.join(", ")}` : "no admin to tell";
+}
+
 async function onComment(comment: Record<string, unknown>) {
   const { data: task } = await db.from("tasks")
     .select("*").eq("id", comment.task_id as string).maybeSingle();
@@ -262,16 +285,20 @@ Deno.serve(async (req) => {
     }
 
     // database webhooks
-    const { type, table, record, old_record } = body;
+    const { type, table, record, old_record, actor } = body;
 
     if (table === "tasks" && type === "INSERT") {
       return new Response(await onTaskCreated(record), { status: 200 });
     }
     if (table === "tasks" && type === "UPDATE") {
+      const results: string[] = [];
       if (record.assignee && old_record && record.assignee !== old_record.assignee) {
-        return new Response(await onTaskReassigned(record), { status: 200 });
+        results.push(await onTaskReassigned(record));
       }
-      return new Response("no assignee change", { status: 200 });
+      if (old_record && old_record.status !== "review" && record.status === "review") {
+        results.push(await onMovedToReview(record, actor ?? null));
+      }
+      return new Response(results.length ? results.join(" | ") : "nothing worth an email", { status: 200 });
     }
     if (table === "comments" && type === "INSERT") {
       return new Response(await onComment(record), { status: 200 });

@@ -67,7 +67,6 @@
     display:flex;align-items:center;gap:16px;padding:14px clamp(20px,5vw,44px);
     border-top:1px solid var(--line);
   }
-  footer img{height:15px;width:154px;object-fit:cover;object-position:50% 14.4%;opacity:.85}
   .dots{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
   .dots button{width:8px;height:8px;padding:0;border-radius:999px;border:0;background:rgba(255,255,255,.24);cursor:pointer}
   .dots button[data-on="true"]{background:var(--mint)}
@@ -81,7 +80,6 @@
   a{color:var(--mint)}
   @media(max-width:640px){
     .slide{padding:36px 20px 24px}
-    footer img{display:none}
   }
 </style>
 </head>
@@ -309,7 +307,6 @@
   </div>
 
   <footer>
-    <img src="logo.webp" alt="wecomeone">
     <div class="nav">
       <button id="prev" aria-label="Previous slide">Back</button>
       <button id="next" aria-label="Next slide">Next</button>

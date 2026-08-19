@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Task Board training | Wecomeone</title>
+<link rel="icon" href="logo.webp">
+<meta name="theme-color" content="#1a1a1a">
+<style>
+  :root{
+    --ink:#1a1a1a;
+    --mint:#44ffcf;
+    --paper:#fcfcfb;
+    --line:rgba(255,255,255,.14);
+    --dim:#a8a7a1;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;background:var(--ink);color:#fff;
+    font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .deck{height:100%;display:grid;grid-template-rows:1fr auto}
+  .stage{position:relative;overflow:hidden}
+  .slide{
+    position:absolute;inset:0;display:none;
+    padding:64px clamp(28px,7vw,110px) 40px;
+    overflow:auto;
+  }
+  .slide[data-on="true"]{display:flex;flex-direction:column;justify-content:center}
+  .kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--mint);margin:0 0 14px}
+  h1{font-size:clamp(30px,5.2vw,54px);line-height:1.05;letter-spacing:-.02em;margin:0 0 18px;font-weight:650}
+  h2{font-size:clamp(24px,3.6vw,38px);line-height:1.1;letter-spacing:-.02em;margin:0 0 20px;font-weight:650}
+  p,li{font-size:clamp(15px,1.5vw,19px);line-height:1.6;color:#e9e8e3;max-width:60ch}
+  p{margin:0 0 14px}
+  ul{margin:0 0 14px;padding-left:20px}
+  li{margin:0 0 8px}
+  strong{color:#fff}
+  .lead{font-size:clamp(17px,1.9vw,22px);color:#fff}
+  .dim{color:var(--dim)}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:clamp(20px,4vw,54px);align-items:start}
+  @media(max-width:820px){.cols{grid-template-columns:1fr;gap:22px}}
+
+  /* little mockups, drawn rather than screenshotted so they never go stale */
+  .mock{background:var(--paper);color:#0b0b0b;border-radius:12px;padding:14px;font-size:13px}
+  .mockcard{background:#fff;border:1px solid #e1e0d9;border-radius:9px;padding:10px 11px;margin:0 0 8px}
+  .mockcard:last-child{margin:0}
+  .mockcard .c{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:#898781}
+  .mockcard .t{font-weight:600;margin:3px 0 7px;font-size:13px}
+  .chips{display:flex;gap:5px;flex-wrap:wrap}
+  .chip{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;padding:2px 7px;border-radius:999px;
+    border:1px solid rgba(11,11,11,.1);background:#fbfaf7;color:#52514e}
+  .chip.red{border-color:rgba(208,59,59,.35);color:#a52c2c;background:#fdf3f3}
+  .dot{width:7px;height:7px;border-radius:2px;display:inline-block}
+  .statlist{list-style:none;padding:0;margin:0}
+  .statlist li{display:flex;gap:12px;align-items:flex-start;margin:0 0 14px;font-size:clamp(14px,1.4vw,17px)}
+  .statlist .sw{width:11px;height:11px;border-radius:3px;flex:none;margin-top:6px}
+  .statlist b{display:block;color:#fff}
+  .statlist span{color:var(--dim);font-size:.92em}
+  .keys{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:1px 7px;font-size:.85em;color:#fff}
+  .note{border-left:2px solid var(--mint);padding:2px 0 2px 16px;color:#e9e8e3}
+  .big{font-size:clamp(40px,7vw,76px);font-weight:650;letter-spacing:-.03em;line-height:1;color:var(--mint)}
+
+  /* chrome */
+  footer{
+    display:flex;align-items:center;gap:16px;padding:14px clamp(20px,5vw,44px);
+    border-top:1px solid var(--line);
+  }
+  footer img{height:15px;width:154px;object-fit:cover;object-position:50% 14.4%;opacity:.85}
+  .dots{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
+  .dots button{width:8px;height:8px;padding:0;border-radius:999px;border:0;background:rgba(255,255,255,.24);cursor:pointer}
+  .dots button[data-on="true"]{background:var(--mint)}
+  .nav{display:flex;gap:8px}
+  .nav button{
+    background:transparent;border:1px solid var(--line);color:#fff;border-radius:8px;
+    padding:6px 12px;cursor:pointer;font:inherit;font-size:13px;
+  }
+  .nav button:hover{background:rgba(255,255,255,.09)}
+  .count{font-size:12px;color:var(--dim);min-width:52px}
+  a{color:var(--mint)}
+  @media(max-width:640px){
+    .slide{padding:36px 20px 24px}
+    footer img{display:none}
+  }
+</style>
+</head>
+<body>
+<div class="deck">
+  <div class="stage" id="stage">
+
+    <!-- 1 -->
+    <section class="slide" data-on="true">
+      <p class="kicker">Wecomeone Marketing And Comms</p>
+      <h1>The Task Board</h1>
+      <p class="lead">Everything you need to run your week on it, in about ten minutes.</p>
+      <p class="dim">Use the arrow keys, or the buttons at the bottom.</p>
+    </section>
+
+    <!-- 2 -->
+    <section class="slide">
+      <p class="kicker">Why it exists</p>
+      <h2>One place, one version of the truth</h2>
+      <div class="cols">
+        <div>
+          <p>Every task for every client lives here. Who owns it, what state it is in, when it is due, and the whole conversation about it.</p>
+          <p>The point is not admin. The point is that nobody has to ask "where are we with this" ever again.</p>
+        </div>
+        <div>
+          <p class="note">If work is not on the board, it does not exist. That rule only works if everyone follows it, including for the small stuff.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3 -->
+    <section class="slide">
+      <p class="kicker">Getting in</p>
+      <h2>tasks.wecomeone.me</h2>
+      <div class="cols">
+        <div>
+          <p>Your own email and password. Nothing is visible until you sign in.</p>
+          <p>Forgot it? Type your email on the sign in screen and click <strong>Forgot your password</strong>. A reset link arrives in a minute and lasts an hour.</p>
+        </div>
+        <div>
+          <p class="note">It works on your phone. Same address, same login. Add it to your home screen and it behaves like an app.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4 -->
+    <section class="slide">
+      <p class="kicker">The three views</p>
+      <h2>Same tasks, three ways of looking</h2>
+      <ul>
+        <li><strong>Dashboard.</strong> The morning view. Counts, progress per client, who is carrying what, and anything that needs attention.</li>
+        <li><strong>Board.</strong> The working view. Columns by status, drag a card across as work moves.</li>
+        <li><strong>Table.</strong> The detail view. Every field, sortable by any column. Good for a client by client sweep.</li>
+      </ul>
+      <p class="dim">The filter bar at the top applies to all three, so filtering to one client stays filtered as you switch.</p>
+    </section>
+
+    <!-- 5 -->
+    <section class="slide">
+      <p class="kicker">Adding work</p>
+      <h2>Four seconds, not thirty</h2>
+      <div class="cols">
+        <div>
+          <p>Use the bar above the board. Type the task, tab to the client, pick who, press <span class="keys">Enter</span>.</p>
+          <p>It saves with sensible defaults and you fill in the rest later, or never. A task captured roughly beats a task not captured.</p>
+          <p class="dim">The <span class="keys">n</span> key opens the full task panel from anywhere.</p>
+        </div>
+        <div class="mock">
+          <div style="display:flex;gap:6px">
+            <div style="flex:1;border:1px solid #d9d8d2;border-radius:7px;padding:8px 10px;color:#898781">Add a task and press enter</div>
+            <div style="width:78px;border:1px solid #d9d8d2;border-radius:7px;padding:8px 10px;color:#898781">Client</div>
+            <div style="background:#1a1a1a;color:#fff;border-radius:7px;padding:8px 14px;font-weight:600">Add</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6 -->
+    <section class="slide">
+      <p class="kicker">Inside a task</p>
+      <h2>The fields that matter</h2>
+      <div class="cols">
+        <div>
+          <ul>
+            <li><strong>Client and project.</strong> Project groups tasks, a campaign or a retainer month.</li>
+            <li><strong>Assignee.</strong> Who is responsible, not who is doing it right now.</li>
+            <li><strong>Due date.</strong> Drives the overdue flags and the daily email. Leave it empty if there is genuinely no deadline.</li>
+            <li><strong>Brief.</strong> What done looks like.</li>
+            <li><strong>Links.</strong> One per line. The drive folder, the brief, the live page.</li>
+          </ul>
+        </div>
+        <div class="mock">
+          <div class="mockcard">
+            <div class="c">Client name</div>
+            <div class="t">Shoot the showroom reel</div>
+            <div class="chips">
+              <span class="chip"><span class="dot" style="background:#ec835a"></span>High</span>
+              <span class="chip">Due in 2d</span>
+              <span class="chip">2 links</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7 -->
+    <section class="slide">
+      <p class="kicker">The important slide</p>
+      <h2>What the six statuses mean</h2>
+      <ul class="statlist">
+        <li><span class="sw" style="background:#898781"></span><div><b>Not started</b><span>Agreed and captured. Nobody has begun.</span></div></li>
+        <li><span class="sw" style="background:#2a78d6"></span><div><b>In progress</b><span>Someone on our team is actively working on it now.</span></div></li>
+        <li><span class="sw" style="background:#ec835a"></span><div><b>Waiting</b><span>Parked with someone outside the team. A contractor, the client, a supplier.</span></div></li>
+        <li><span class="sw" style="background:#d03b3b"></span><div><b>Blocked</b><span>Stuck. It needs a decision or something we do not have.</span></div></li>
+        <li><span class="sw" style="background:#fab219"></span><div><b>Review</b><span>Finished, waiting on approval. This emails Andreas.</span></div></li>
+        <li><span class="sw" style="background:#0ca30c"></span><div><b>Completed</b><span>Done and delivered.</span></div></li>
+      </ul>
+    </section>
+
+    <!-- 8 -->
+    <section class="slide">
+      <p class="kicker">The one people get wrong</p>
+      <h2>In progress means us. Waiting means them.</h2>
+      <div class="cols">
+        <div>
+          <p>If a contractor has the website, or the client owes us photos, that is <strong>Waiting</strong>, not In progress. Leaving it as In progress makes it look like we are working on it when nobody is.</p>
+          <p>Set Waiting and the panel asks who has it. The board then counts the days.</p>
+          <p>Past a week the chip turns red and the task appears in Needs attention, so it stops being forgotten.</p>
+        </div>
+        <div class="mock">
+          <div class="mockcard">
+            <div class="c">Client name</div>
+            <div class="t">Website changes after branding</div>
+            <div class="chips">
+              <span class="chip"><span class="dot" style="background:#ec835a"></span>High</span>
+              <span class="chip">Due 25 Aug</span>
+              <span class="chip red">Maria, contractor, 12d</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 9 -->
+    <section class="slide">
+      <p class="kicker">Moving work along</p>
+      <h2>Drag on a laptop, tap on a phone</h2>
+      <div class="cols">
+        <div>
+          <p>On the board, drag a card into another column. The start date fills in the first time it leaves Not started.</p>
+          <p>On a phone there is a status dropdown on every card, since dragging does not work on a touch screen.</p>
+        </div>
+        <div>
+          <p class="note">Put a date in the Completed field and the status changes to Completed by itself. You never need to do both.</p>
+          <p class="dim">Completed tasks drop off the board after thirty days. They are still there, use Show archive in the filter bar.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 10 -->
+    <section class="slide">
+      <p class="kicker">Talking about work</p>
+      <h2>Comments, not messages</h2>
+      <div class="cols">
+        <div>
+          <p>Every task has a comment thread. Use it instead of WhatsApp for anything about that task.</p>
+          <p>Six weeks later the reasoning sits with the task rather than three hundred messages up a chat.</p>
+        </div>
+        <div>
+          <p class="note">Comment on someone else's task and they get an email. Comment on your own and nobody is disturbed.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 11 -->
+    <section class="slide">
+      <p class="kicker">Email</p>
+      <h2>When the board writes to you</h2>
+      <ul>
+        <li>A task is <strong>assigned</strong> to you</li>
+        <li>A task is <strong>handed over</strong> to you</li>
+        <li>Someone <strong>comments</strong> on your task</li>
+        <li>A task moves to <strong>Review</strong>, to the admin</li>
+        <li>Each morning, anything of yours <strong>due that day</strong></li>
+      </ul>
+      <p class="dim">Nothing else. Status changes, edits and moved dates are silent on purpose, so the emails stay worth reading.</p>
+    </section>
+
+    <!-- 12 -->
+    <section class="slide">
+      <p class="kicker">The habit</p>
+      <h2>Two minutes, twice a day</h2>
+      <div class="cols">
+        <div>
+          <p><strong>Morning.</strong> Open the Dashboard. Read Needs attention. Anything overdue, blocked, urgent, or parked too long is right there.</p>
+          <p><strong>End of day.</strong> Move what you finished, park what you handed on, add what came up.</p>
+        </div>
+        <div>
+          <p class="note">A board updated once a week is worse than no board, because people trust it and it is wrong.</p>
+          <p class="dim">The My tasks button filters to yours. Overdue only shows the fires.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 13 -->
+    <section class="slide">
+      <p class="kicker">Admin only</p>
+      <h2>Things only Andreas can do</h2>
+      <ul>
+        <li><strong>Delete tasks.</strong> Everyone else can do everything except delete, which is what stops accidents. It asks before it does it.</li>
+        <li><strong>Add people.</strong> Supabase, Authentication, Invite user. They set their own password.</li>
+        <li><strong>Backups.</strong> Under the avatar menu, Export a backup. Worth doing monthly.</li>
+      </ul>
+      <p class="note">Tasks assigned to an admin are private and invisible to everyone else. Bear that in mind before handing a task to Andreas rather than moving it to Review.</p>
+    </section>
+
+    <!-- 14 -->
+    <section class="slide">
+      <p class="kicker">That is it</p>
+      <h1>Capture it, own it,<br>keep it honest.</h1>
+      <p class="lead">Everything else is detail.</p>
+      <p class="dim">Board: <a href="https://tasks.wecomeone.me">tasks.wecomeone.me</a></p>
+    </section>
+
+  </div>
+
+  <footer>
+    <img src="logo.webp" alt="wecomeone">
+    <div class="nav">
+      <button id="prev" aria-label="Previous slide">Back</button>
+      <button id="next" aria-label="Next slide">Next</button>
+    </div>
+    <span class="count" id="count"></span>
+    <div class="dots" id="dots"></div>
+  </footer>
+</div>
+
+<script>
+  const slides = [...document.querySelectorAll('.slide')];
+  const dots = document.getElementById('dots');
+  let at = 0;
+
+  slides.forEach((_, i) => {
+    const b = document.createElement('button');
+    b.setAttribute('aria-label', 'Slide ' + (i + 1));
+    b.addEventListener('click', () => go(i));
+    dots.appendChild(b);
+  });
+
+  function go(i){
+    at = Math.max(0, Math.min(slides.length - 1, i));
+    slides.forEach((s, n) => s.dataset.on = String(n === at));
+    [...dots.children].forEach((d, n) => d.dataset.on = String(n === at));
+    document.getElementById('count').textContent = (at + 1) + ' of ' + slides.length;
+    location.hash = at + 1;
+    slides[at].scrollTop = 0;
+  }
+
+  document.getElementById('next').addEventListener('click', () => go(at + 1));
+  document.getElementById('prev').addEventListener('click', () => go(at - 1));
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') { e.preventDefault(); go(at + 1); }
+    if (e.key === 'ArrowLeft'  || e.key === 'PageUp') { e.preventDefault(); go(at - 1); }
+    if (e.key === 'Home') go(0);
+    if (e.key === 'End') go(slides.length - 1);
+  });
+
+  // swipe on a phone
+  let x0 = null;
+  document.getElementById('stage').addEventListener('touchstart', e => x0 = e.touches[0].clientX, {passive:true});
+  document.getElementById('stage').addEventListener('touchend', e => {
+    if (x0 === null) return;
+    const dx = e.changedTouches[0].clientX - x0;
+    if (Math.abs(dx) > 55) go(at + (dx < 0 ? 1 : -1));
+    x0 = null;
+  }, {passive:true});
+
+  go(Math.max(0, (parseInt(location.hash.slice(1), 10) || 1) - 1));
+</script>
+</body>
+</html>

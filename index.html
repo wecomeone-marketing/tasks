@@ -48,7 +48,8 @@
     background:var(--brand-ink);
     border-bottom:1px solid #000;
   }
-  header.top .brand img{height:17px;width:auto;display:block}
+  /* the source logo has generous empty space around the wordmark, so crop to it */
+  header.top .brand img{width:150px;height:17px;object-fit:cover;display:block}
   header.top .brand strong{color:#fff;font-weight:600;font-size:14px;letter-spacing:0}
   header.top .brand span{color:#8f8e89}
   header.top .saved{color:#8f8e89}
@@ -255,7 +256,7 @@
 
   .login{position:fixed;inset:0;z-index:100;background:var(--brand-ink);display:grid;place-items:center;
     padding:20px;align-content:center;gap:22px}
-  .login .loginlogo{height:26px;width:auto}
+  .login .loginlogo{width:210px;height:24px;object-fit:cover}
   .login.hidden{display:none}
   .loginbox{background:var(--surface);border:1px solid var(--grid);border-radius:14px;padding:28px;width:min(380px,100%);box-shadow:var(--shadow)}
   .loginbox h1{font-size:20px;margin:0;letter-spacing:-.01em}

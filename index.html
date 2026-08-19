@@ -285,6 +285,17 @@
   .linky{background:none;border:0;padding:0;margin-top:10px;color:var(--ink-2);font-size:12.5px;text-decoration:underline;cursor:pointer}
   .booting{position:fixed;inset:0;z-index:110;background:var(--brand-ink);display:grid;place-items:center;color:#8f8e89;font-size:13px}
   .booting.hidden{display:none}
+  .confirm{position:fixed;inset:0;z-index:120;background:rgba(11,11,11,.45);display:none;
+    place-items:center;padding:20px}
+  .confirm[data-open="true"]{display:grid}
+  .confirmbox{background:var(--surface);border:1px solid var(--grid);border-radius:12px;
+    padding:24px;width:min(400px,100%);box-shadow:var(--shadow)}
+  .confirmbox h2{margin:0 0 10px;font-size:17px;letter-spacing:-.01em}
+  .confirmwhat{margin:0 0 10px;font-size:14px;font-weight:600}
+  .confirmnote{margin:0 0 20px;font-size:13px;color:var(--ink-2);line-height:1.5}
+  .confirmrow{display:flex;gap:8px;justify-content:flex-end}
+  .btn.danger.solid{background:var(--critical);border-color:var(--critical);color:#fff;font-weight:600}
+  .btn.danger.solid:hover{background:#b93333;border-color:#b93333}
   .toast{
     position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);
     background:var(--ink);color:#fff;padding:9px 16px;border-radius:999px;font-size:13px;
@@ -528,6 +539,18 @@
     <button class="btn primary" type="submit" id="setpwBtn" style="width:100%">Save password and open the board</button>
     <p class="loginmsg" id="setpwMsg"></p>
   </form>
+</div>
+
+<div class="confirm" id="confirmDelete">
+  <div class="confirmbox" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle">
+    <h2 id="confirmTitle">Delete this task?</h2>
+    <p class="confirmwhat" id="confirmWhat"></p>
+    <p class="confirmnote">This cannot be undone. Any comments on the task go with it.</p>
+    <div class="confirmrow">
+      <button class="btn" id="confirmNo">Not now</button>
+      <button class="btn danger solid" id="confirmYes">Yes</button>
+    </div>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -1235,9 +1258,28 @@ $('#newTaskBtn').addEventListener('click', ()=>openTask(null));
 $('#closeModal').addEventListener('click', closeModal);
 $('#scrim').addEventListener('click', closeModal);
 $('#saveTask').addEventListener('click', saveTask);
-$('#deleteTask').addEventListener('click', async ()=>{
-  if(!EDITING) return;
-  await Store.remove(EDITING.id);
+/* deleting is the one thing on this board that cannot be undone, so it asks first */
+let PENDING_DELETE = null;
+
+function askDelete(task){
+  PENDING_DELETE = task;
+  $('#confirmWhat').textContent = task.title + (task.client ? '  ·  ' + task.client : '');
+  $('#confirmDelete').dataset.open = 'true';
+  setTimeout(()=>$('#confirmNo').focus(), 30);
+}
+function closeConfirm(){
+  PENDING_DELETE = null;
+  $('#confirmDelete').dataset.open = 'false';
+}
+
+$('#deleteTask').addEventListener('click', ()=>{ if(EDITING) askDelete(EDITING); });
+$('#confirmNo').addEventListener('click', closeConfirm);
+$('#confirmDelete').addEventListener('click', e=>{ if(e.target.id === 'confirmDelete') closeConfirm(); });
+$('#confirmYes').addEventListener('click', async ()=>{
+  if(!PENDING_DELETE) return;
+  const id = PENDING_DELETE.id;
+  closeConfirm();
+  await Store.remove(id);
   TASKS = await Store.list();
   closeModal(); render(); toast('Task deleted');
 });
@@ -1350,8 +1392,10 @@ $('#fileInput').addEventListener('change', async e=>{
   e.target.value='';
 });
 document.addEventListener('keydown', e=>{
+  if(e.key==='Escape' && $('#confirmDelete').dataset.open === 'true'){ closeConfirm(); return; }
   if(e.key==='Escape') closeModal();
-  if(e.key==='n' && !/input|textarea|select/i.test(document.activeElement.tagName)) { e.preventDefault(); openTask(null); }
+  if(e.key==='n' && $('#confirmDelete').dataset.open !== 'true'
+     && !/input|textarea|select/i.test(document.activeElement.tagName)) { e.preventDefault(); openTask(null); }
 });
 
 </script>

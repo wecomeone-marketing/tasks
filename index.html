@@ -177,6 +177,58 @@
   .empty{padding:40px 20px;text-align:center;color:var(--ink-muted)}
   .hidden{display:none !important}
   .note{font-size:12px;color:var(--ink-muted);margin:4px 0 0}
+  /* quick add */
+  .quickadd{display:flex;gap:8px;align-items:center;background:var(--surface);border:1px solid var(--grid);
+    border-radius:var(--radius);padding:9px 10px;margin-bottom:14px}
+  .quickadd input,.quickadd select{border:1px solid var(--ring);background:#fff;padding:8px 10px;border-radius:8px}
+  .quickadd .qa-title{flex:1;min-width:120px}
+  .quickadd .qa-client{width:170px}
+  .quickadd .hint{font-size:12px;color:var(--ink-muted);white-space:nowrap}
+
+  /* links */
+  .linkchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .linkchip{display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:3px 9px;border-radius:999px;
+    border:1px solid var(--ring);background:#fbfaf7;color:var(--ink-2);text-decoration:none;max-width:100%}
+  .linkchip:hover{background:#f2f1ec;color:var(--ink)}
+  .linkchip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  /* status control on a card, phones only */
+  .card-status{display:none;width:100%;margin-top:8px;border:1px solid var(--ring);background:#fff;
+    padding:7px 8px;border-radius:8px;font-size:13px}
+
+  /* ---------------------------------------------------------- phones */
+  @media(max-width:760px){
+    .wrap{padding:0 12px 40px}
+    .top-inner{padding:10px 12px;gap:10px}
+    .brand span{display:none}
+    .tabs{order:3;width:100%}
+    .tabs button{flex:1}
+    #exportBtn,#importBtn,.saved{display:none}
+    .who{margin-left:auto}
+    #meName{display:none}
+    .filters{gap:6px;padding:10px 0 12px}
+    .filters input[type=search]{min-width:0;width:100%}
+    .filters select,.filters .toggle,.filters .btn{font-size:13px;padding:6px 9px}
+    .count{width:100%}
+    .kpis{grid-template-columns:1fr 1fr;gap:8px}
+    .kpi{padding:11px 12px}
+    .kpi .value{font-size:24px}
+    .board{display:flex;flex-direction:column;gap:10px}
+    .col{min-height:0}
+    .col-empty{display:none}
+    #view-board .note{display:none}
+    .card{cursor:default}
+    .card-status{display:block}
+    .quickadd{flex-wrap:wrap}
+    .quickadd .qa-client{width:100%}
+    .quickadd .hint{display:none}
+    .quickadd .btn{flex:1}
+    .modal{width:100%;border-left:0}
+    .two{grid-template-columns:1fr}
+    table{font-size:12.5px}
+    td.taskcell{min-width:180px}
+  }
+
   .login{position:fixed;inset:0;z-index:100;background:var(--plane);display:grid;place-items:center;padding:20px}
   .login.hidden{display:none}
   .loginbox{background:var(--surface);border:1px solid var(--grid);border-radius:14px;padding:28px;width:min(380px,100%);box-shadow:var(--shadow)}
@@ -231,9 +283,18 @@
     <select id="fType"><option value="">All task types</option></select>
     <button class="toggle" id="tMine" data-on="false">My tasks</button>
     <button class="toggle" id="tOverdue" data-on="false">Overdue only</button>
+    <button class="toggle" id="tArchive" data-on="false" title="Tasks completed more than 30 days ago">Show archive</button>
     <button class="btn small" id="clearFilters">Clear</button>
     <span class="spacer"></span>
     <span class="count" id="resultCount"></span>
+  </div>
+
+  <div class="quickadd hidden" id="quickAdd">
+    <input class="qa-title" id="qaTitle" placeholder="Add a task and press enter">
+    <input class="qa-client" id="qaClient" list="clientList" placeholder="Client">
+    <select id="qaAssignee"></select>
+    <button class="btn primary" id="qaAdd">Add</button>
+    <span class="hint">Fill in the rest later</span>
   </div>
 
   <!-- DASHBOARD -->
@@ -346,7 +407,12 @@
     </div>
     <div class="field">
       <label for="fld-notes">Brief</label>
-      <textarea id="fld-notes" placeholder="Scope, deliverable, links"></textarea>
+      <textarea id="fld-notes" placeholder="Scope and deliverable"></textarea>
+    </div>
+    <div class="field">
+      <label for="fld-links">Links</label>
+      <textarea id="fld-links" placeholder="One per line. Brief, drive folder, live page" style="min-height:56px"></textarea>
+      <div class="linkchips" id="linkChips"></div>
     </div>
 
     <div class="comments">
@@ -361,6 +427,7 @@
   </div>
   <footer>
     <button class="btn primary" id="saveTask">Save task</button>
+    <button class="btn hidden" id="duplicateTask" title="Copy this task with fresh dates">Duplicate</button>
     <button class="btn danger hidden" id="deleteTask">Delete</button>
     <span style="flex:1"></span>
     <span class="note" id="roleNote"></span>
@@ -457,21 +524,33 @@ function fromRow(r){
     priority: r.priority, status: r.status,
     date_started: r.date_started||'', due_date: r.due_date||'', date_completed: r.date_completed||'',
     notes: r.notes||'',
+    links: r.links||'',
     comments: (r.comments||[]).map(c=>({ id:c.id, author:nameOf(c.author), body:c.body, at:c.created_at })),
     created_by: nameOf(r.created_by),
     created_at: r.created_at, updated_at: r.updated_at
   };
 }
+// Only the fields actually present get written. Sending a partial patch, say a
+// status change from the board, must never blank out the fields it does not mention.
+const ROW_FIELDS = {
+  client:         v => v,
+  project:        v => v,
+  title:          v => v,
+  type:           v => v,
+  assignee:       v => idOf(v),
+  priority:       v => v,
+  status:         v => v,
+  date_started:   v => v || null,
+  due_date:       v => v || null,
+  date_completed: v => v || null,
+  notes:          v => v,
+  links:          v => v
+};
 function toRow(t){
-  const r = {
-    client:t.client, project:t.project, title:t.title, type:t.type,
-    assignee: idOf(t.assignee), priority:t.priority, status:t.status,
-    date_started: t.date_started || null,
-    due_date: t.due_date || null,
-    date_completed: t.date_completed || null,
-    notes: t.notes
-  };
-  Object.keys(r).forEach(k => r[k] === undefined && delete r[k]);
+  const r = {};
+  for(const k in ROW_FIELDS){
+    if(Object.prototype.hasOwnProperty.call(t, k) && t[k] !== undefined) r[k] = ROW_FIELDS[k](t[k]);
+  }
   return r;
 }
 
@@ -529,7 +608,7 @@ let ME = null;
 let VIEW = 'dashboard';
 let SORT = { key:'due', dir:1 };
 let EDITING = null;
-const F = { q:'', client:'', assignee:'', status:'', priority:'', type:'', mine:false, overdue:false };
+const F = { q:'', client:'', assignee:'', status:'', priority:'', type:'', mine:false, overdue:false, archive:false };
 
 const $  = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
@@ -541,6 +620,11 @@ const prioOf   = k => PRIORITIES.find(p=>p.key===k) || PRIORITIES[0];
 const fmtDate = d => d ? new Date(d+'T00:00:00').toLocaleDateString('en-GB',{day:'2-digit',month:'short'}) : '';
 const daysTo = d => d ? Math.round((new Date(d+'T00:00:00') - new Date(todayISO()+'T00:00:00'))/86400000) : null;
 const isOverdue = t => t.status!=='done' && t.due_date && daysTo(t.due_date) < 0;
+// finished and more than 30 days old, kept in the database but off the board
+const isArchived = t => t.status==='done' && t.date_completed && daysTo(t.date_completed) < -30;
+const linksOf = t => (t.links||'').split(/[\n,]/).map(x=>x.trim()).filter(Boolean);
+const hostOf = u => { try { return new URL(u.startsWith('http') ? u : 'https://'+u).hostname.replace(/^www\./,''); } catch { return u; } };
+const href = u => u.startsWith('http') ? u : 'https://' + u;
 
 function stampSaved(){
   const el = $('#savedAt');
@@ -560,6 +644,7 @@ function toast(msg){
 function filtered(){
   const q = F.q.trim().toLowerCase();
   return TASKS.filter(t=>{
+    if(!F.archive && isArchived(t)) return false;
     if(F.client && t.client!==F.client) return false;
     if(F.assignee && t.assignee!==F.assignee) return false;
     if(F.status && t.status!==F.status) return false;
@@ -670,6 +755,7 @@ function cardHTML(t){
     dueTxt = 'Completed ' + fmtDate(t.date_completed);
   }
   const nComments = (t.comments||[]).length;
+  const nLinks = linksOf(t).length;
   return `<div class="card" draggable="true" data-id="${t.id}">
     <div class="client">${esc(t.client)}</div>
     <div class="title">${esc(t.title)}</div>
@@ -678,7 +764,11 @@ function cardHTML(t){
       <span class="chip"><span class="dot" style="background:${p.color}"></span>${p.label}</span>
       ${dueTxt?`<span class="chip ${dueCls}">${dueTxt}</span>`:''}
       ${nComments?`<span class="chip">${nComments} note${nComments>1?'s':''}</span>`:''}
+      ${nLinks?`<span class="chip">${nLinks} link${nLinks>1?'s':''}</span>`:''}
     </div>
+    <select class="card-status" data-id="${t.id}">
+      ${STATUSES.map(s=>`<option value="${s.key}"${s.key===t.status?' selected':''}>${s.label}</option>`).join('')}
+    </select>
   </div>`;
 }
 
@@ -686,7 +776,7 @@ function renderBoard(rows){
   $('#board').innerHTML = STATUSES.map(s=>{
     const list = rows.filter(t=>t.status===s.key)
       .sort((a,b)=> (a.due_date||'9999').localeCompare(b.due_date||'9999'));
-    return `<div class="col" data-status="${s.key}">
+    return `<div class="col${list.length?'':' col-empty'}" data-status="${s.key}">
       <header><span class="dot" style="background:${s.color}"></span>${s.label}<span class="n">${list.length}</span></header>
       <div class="stack">${list.map(cardHTML).join('') || '<div class="empty" style="padding:18px 8px;font-size:12px">Nothing here</div>'}</div>
     </div>`;
@@ -732,7 +822,7 @@ function renderTable(rows){
 function openTask(id){
   EDITING = id ? TASKS.find(t=>t.id===id) : null;
   const t = EDITING || { client:'', project:'', title:'', type:TYPES[0], assignee:ME.name,
-    priority:'medium', status:'not_started', date_started:'', due_date:'', date_completed:'', notes:'', comments:[] };
+    priority:'medium', status:'not_started', date_started:'', due_date:'', date_completed:'', notes:'', links:'', comments:[] };
   $('#modalTitle').textContent = EDITING ? 'Edit task' : 'New task';
   $('#fld-title').value = t.title;
   $('#fld-client').value = t.client;
@@ -745,10 +835,13 @@ function openTask(id){
   $('#fld-due').value = t.due_date||'';
   $('#fld-completed').value = t.date_completed||'';
   $('#fld-notes').value = t.notes||'';
+  $('#fld-links').value = t.links||'';
+  renderLinkChips();
   $('#newComment').value = '';
   renderComments(t);
   $('#auditLine').textContent = EDITING ? `Created by ${t.created_by||'unknown'} · last updated ${new Date(t.updated_at||Date.now()).toLocaleString('en-GB')}` : '';
   $('#deleteTask').classList.toggle('hidden', !EDITING || ME.role!=='admin');
+  $('#duplicateTask').classList.toggle('hidden', !EDITING);
   $('#roleNote').textContent = ME.role==='admin' ? 'Signed in as admin' : 'Members can edit and comment, admins can delete';
   $('#scrim').dataset.open='true';
   $('#modal').dataset.open='true';
@@ -759,6 +852,13 @@ function closeModal(){
   $('#modal').dataset.open='false';
   EDITING = null;
 }
+function renderLinkChips(){
+  const list = linksOf({ links: $('#fld-links').value });
+  $('#linkChips').innerHTML = list.map(u=>
+    `<a class="linkchip" href="${esc(href(u))}" target="_blank" rel="noopener"><span>${esc(hostOf(u))}</span></a>`
+  ).join('');
+}
+
 function renderComments(t){
   const list = (t.comments||[]).slice().sort((a,b)=>a.at.localeCompare(b.at));
   $('#commentList').innerHTML = list.length ? list.map(c=>`
@@ -783,7 +883,8 @@ async function saveTask(){
     date_started: $('#fld-started').value,
     due_date: $('#fld-due').value,
     date_completed: $('#fld-completed').value,
-    notes: $('#fld-notes').value.trim()
+    notes: $('#fld-notes').value.trim(),
+    links: $('#fld-links').value.trim()
   };
   if(!payload.title){ toast('Give the task a name'); return; }
 
@@ -832,7 +933,17 @@ function wireBoard(){
   let dragId = null;
   $$('#board .card').forEach(el=>{
     el.addEventListener('dragstart', e=>{ dragId = el.dataset.id; e.dataTransfer.effectAllowed='move'; });
-    el.addEventListener('click', ()=>openTask(el.dataset.id));
+    el.addEventListener('click', e=>{
+      if(e.target.closest('.card-status')) return;   // the dropdown is not a way into the task
+      openTask(el.dataset.id);
+    });
+  });
+  $$('#board .card-status').forEach(sel=>{
+    sel.addEventListener('click', e=>e.stopPropagation());
+    sel.addEventListener('change', async e=>{
+      e.stopPropagation();
+      await setStatus(sel.dataset.id, e.target.value);
+    });
   });
   $$('#board .col').forEach(col=>{
     col.addEventListener('dragover', e=>{ e.preventDefault(); col.classList.add('drop'); });
@@ -840,25 +951,28 @@ function wireBoard(){
     col.addEventListener('drop', async e=>{
       e.preventDefault(); col.classList.remove('drop');
       if(!dragId) return;
-      const status = col.dataset.status;
-      const patch = { status };
-      if(status==='done') patch.date_completed = todayISO();
-      else patch.date_completed = '';
-      const t = TASKS.find(x=>x.id===dragId);
-      if(status!=='not_started' && t && !t.date_started) patch.date_started = todayISO();
-      await Store.update(dragId, patch);
-      TASKS = await Store.list();
-      dragId = null;
-      render();
-      toast('Moved to ' + statusOf(status).label);
+      const id = dragId; dragId = null;
+      await setStatus(id, col.dataset.status);
     });
   });
+}
+
+async function setStatus(id, status){
+  const t = TASKS.find(x=>x.id===id);
+  const patch = { status };
+  patch.date_completed = status==='done' ? todayISO() : '';
+  if(status!=='not_started' && t && !t.date_started) patch.date_started = todayISO();
+  await Store.update(id, patch);
+  TASKS = await Store.list();
+  render();
+  toast('Moved to ' + statusOf(status).label);
 }
 
 function switchView(v){
   VIEW = v;
   $$('.tabs button').forEach(b=>b.setAttribute('aria-selected', String(b.dataset.view===v)));
   ['dashboard','board','table'].forEach(x=>$('#view-'+x).classList.toggle('hidden', x!==v));
+  $('#quickAdd').classList.toggle('hidden', v==='dashboard');
   render();
 }
 
@@ -870,6 +984,8 @@ async function init(){
   fillSelect($('#fld-assignee'), USERS.map(u=>({value:u.name,label:u.name})));
   fillSelect($('#fld-status'), STATUSES.map(s=>({value:s.key,label:s.label})));
   fillSelect($('#fld-priority'), PRIORITIES.map(p=>({value:p.key,label:p.label})));
+  fillSelect($('#qaAssignee'), USERS.map(u=>({value:u.name,label:u.name})));
+  $('#qaAssignee').value = ME.name;
   fillSelect($('#fAssignee'), USERS.map(u=>({value:u.name,label:u.name})), 'All assignees');
   fillSelect($('#fStatus'), STATUSES.map(s=>({value:s.key,label:s.label})), 'All statuses');
   fillSelect($('#fPriority'), PRIORITIES.map(p=>({value:p.key,label:p.label})), 'All priorities');
@@ -1024,12 +1140,57 @@ $('#q').addEventListener('input', e=>{ F.q=e.target.value; render(); });
 ['fClient','fAssignee','fStatus','fPriority','fType'].forEach(id=>{
   $('#'+id).addEventListener('change', e=>{ F[id.slice(1).charAt(0).toLowerCase()+id.slice(2)] = e.target.value; render(); });
 });
+async function quickAdd(){
+  const title = $('#qaTitle').value.trim();
+  if(!title){ $('#qaTitle').focus(); return; }
+  const t = await Store.create({
+    title,
+    client: $('#qaClient').value.trim(),
+    project: '',
+    type: 'Content',
+    assignee: $('#qaAssignee').value,
+    status: 'not_started',
+    priority: 'medium',
+    date_started: '', due_date: '', date_completed: '',
+    notes: '', links: ''
+  });
+  if(!t) return;
+  $('#qaTitle').value = '';
+  TASKS = await Store.list();
+  refreshFilterOptions();
+  render();
+  toast('Task added for ' + $('#qaAssignee').value);
+  $('#qaTitle').focus();
+}
+$('#qaAdd').addEventListener('click', quickAdd);
+$('#qaTitle').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); quickAdd(); }});
+$('#qaClient').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); quickAdd(); }});
+
+$('#duplicateTask').addEventListener('click', async ()=>{
+  if(!EDITING) return;
+  const copy = {
+    title: EDITING.title, client: EDITING.client, project: EDITING.project,
+    type: EDITING.type, assignee: EDITING.assignee, priority: EDITING.priority,
+    status: 'not_started', date_started: '', due_date: '', date_completed: '',
+    notes: EDITING.notes, links: EDITING.links
+  };
+  const made = await Store.create(copy);
+  if(!made) return;
+  TASKS = await Store.list();
+  closeModal(); render();
+  toast('Copied, set the new dates');
+  openTask(made.id);
+});
+
+$('#fld-links').addEventListener('input', renderLinkChips);
+
+$('#tArchive').addEventListener('click', e=>{ F.archive=!F.archive; e.currentTarget.dataset.on=String(F.archive); render(); });
 $('#tMine').addEventListener('click', e=>{ F.mine=!F.mine; e.currentTarget.dataset.on=String(F.mine); render(); });
 $('#tOverdue').addEventListener('click', e=>{ F.overdue=!F.overdue; e.currentTarget.dataset.on=String(F.overdue); render(); });
 $('#clearFilters').addEventListener('click', ()=>{
-  Object.assign(F,{q:'',client:'',assignee:'',status:'',priority:'',type:'',mine:false,overdue:false});
+  Object.assign(F,{q:'',client:'',assignee:'',status:'',priority:'',type:'',mine:false,overdue:false,archive:false});
   $('#q').value=''; ['fClient','fAssignee','fStatus','fPriority','fType'].forEach(id=>$('#'+id).value='');
-  $('#tMine').dataset.on='false'; $('#tOverdue').dataset.on='false';
+  $('#tMine').dataset.on='false'; $('#tOverdue').dataset.on='false'; $('#tArchive').dataset.on='false';
   render();
 });
 document.addEventListener('click', e=>{

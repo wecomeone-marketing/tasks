@@ -315,3 +315,27 @@ stops accidental data loss on a shared board.
 
 The service role key must never appear in `index.html` or anywhere in this repo. It bypasses
 every permission rule. It belongs in the SQL editor and in Edge Function secrets only.
+
+## Client links
+
+One read only page per client, at `/p/#<token>`. The page is `p/index.html`, the database side
+is `client-link-setup.sql`, and both are in this repo.
+
+Three moving parts:
+
+- `tasks.client_visible` and `tasks.client_note`. Visibility defaults to true, so a new task on
+  a client shows up on their page unless someone unticks it. The note is the only free text a
+  client ever reads. The brief, the links and the comment thread stay internal.
+- `client_links`, one row per client, each with its own random token. Row level security limits
+  the whole table to admins, so a member never sees a token.
+- `public.client_progress(text)`, a security definer function granted to `anon`. It is the only
+  thing an unauthenticated visitor can reach. It takes a token, nothing else, and returns a fixed
+  list of fields built by hand inside the function. Adding a column to `tasks` does not expose it.
+
+The token lives in the URL fragment, after the `#`, which browsers never send to a server. It
+stays out of access logs and out of referrer headers.
+
+Completed work drops off the page sixty days after its completion date.
+
+Switching a link off, or replacing the token, kills the old address immediately. Both are one
+click in the board, under the avatar menu, Client links.

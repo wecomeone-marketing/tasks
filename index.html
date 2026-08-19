@@ -385,6 +385,23 @@
   </form>
 </div>
 
+<div class="login hidden" id="setpw">
+  <form class="loginbox" id="setpwForm">
+    <h1>Set your password</h1>
+    <p class="sub">Choose a password for <span id="setpwEmail"></span></p>
+    <div class="field">
+      <label for="pw1">New password</label>
+      <input id="pw1" type="password" autocomplete="new-password" minlength="8" required>
+    </div>
+    <div class="field">
+      <label for="pw2">Repeat it</label>
+      <input id="pw2" type="password" autocomplete="new-password" minlength="8" required>
+    </div>
+    <button class="btn primary" type="submit" id="setpwBtn" style="width:100%">Save password and open the board</button>
+    <p class="loginmsg" id="setpwMsg"></p>
+  </form>
+</div>
+
 <div class="toast" id="toast"></div>
 <input type="file" id="fileInput" accept="application/json" class="hidden">
 
@@ -404,6 +421,7 @@ if(!window.supabase){
   });
   throw new Error('supabase-js failed to load');
 }
+const URL_HASH = window.location.hash || '';
 const SB = window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey);
 
 const STATUSES = [
@@ -919,10 +937,43 @@ $('#signOutBtn').addEventListener('click', async ()=>{
   window.location.reload();
 });
 
+function showSetPassword(){
+  $('#booting').classList.add('hidden');
+  $('#login').classList.add('hidden');
+  $('#setpw').classList.remove('hidden');
+  $('#setpwEmail').textContent = (SESSION && SESSION.user && SESSION.user.email) || 'your account';
+  setTimeout(()=>$('#pw1').focus(), 30);
+}
+
+$('#setpwForm').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const a = $('#pw1').value, b = $('#pw2').value, msg = $('#setpwMsg'), btn = $('#setpwBtn');
+  msg.className = 'loginmsg';
+  if(a.length < 8){ msg.textContent = 'Use at least 8 characters.'; return; }
+  if(a !== b){ msg.textContent = 'The two passwords do not match.'; return; }
+  btn.disabled = true; btn.textContent = 'Saving';
+  const { error } = await SB.auth.updateUser({ password: a });
+  btn.disabled = false; btn.textContent = 'Save password and open the board';
+  if(error){ msg.textContent = 'Could not save that password. ' + error.message; return; }
+  history.replaceState(null, '', window.location.pathname);
+  $('#pw1').value = ''; $('#pw2').value = '';
+  $('#setpw').classList.add('hidden');
+  $('#booting').classList.remove('hidden');
+  await init();
+});
+
 (async function boot(){
+  // an expired or already used invite link comes back as an error in the hash
+  if(/error_description=/.test(URL_HASH)){
+    const m = decodeURIComponent((URL_HASH.match(/error_description=([^&]+)/)||[])[1]||'').replace(/\+/g,' ');
+    history.replaceState(null, '', window.location.pathname);
+    showLogin(m ? ('That link did not work: ' + m + ' Ask for a new one below.') : 'That link has expired. Ask for a new one below.');
+    return;
+  }
   const { data } = await SB.auth.getSession();
   if(data.session){
     SESSION = data.session;
+    if(/type=(invite|recovery|signup)/.test(URL_HASH)){ showSetPassword(); return; }
     try { await init(); }
     catch(err){ console.error(err); showLogin('Signed in, but the board could not load. Try refreshing.'); }
   } else {

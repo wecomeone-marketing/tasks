@@ -321,6 +321,45 @@
   .confirmrow{display:flex;gap:8px;justify-content:center}
   .btn.danger.solid{background:var(--critical);border-color:var(--critical);color:#fff;font-weight:600}
   .btn.danger.solid:hover{background:#b93333;border-color:#b93333}
+  /* Client visibility block inside the task panel */
+  .clientbox{
+    margin:18px 0 0;padding:14px 14px 4px;background:var(--plane);
+    border:1px solid var(--grid);border-radius:var(--radius);
+  }
+  .clientbox > h4{
+    margin:0 0 10px;font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;
+    color:var(--ink-muted);font-weight:600;
+  }
+  .checkrow{display:flex;align-items:flex-start;gap:9px;cursor:pointer;margin:0 0 12px}
+  .checkrow input{width:16px;height:16px;margin:1px 0 0;accent-color:var(--ink);flex:none}
+  .checkrow span{font-size:13.5px}
+
+  /* Client links dialog */
+  .sheet{position:fixed;inset:0;z-index:115;background:rgba(11,11,11,.45);display:none;
+    place-items:start center;padding:40px 20px;overflow:auto}
+  .sheet[data-open="true"]{display:grid}
+  .sheetbox{background:var(--surface);border:1px solid var(--grid);border-radius:12px;
+    width:min(720px,100%);box-shadow:var(--shadow);overflow:hidden}
+  .sheetbox > header{display:flex;align-items:center;gap:10px;padding:16px 18px;
+    border-bottom:1px solid var(--grid)}
+  .sheetbox > header h2{margin:0;font-size:16px;letter-spacing:-.01em}
+  .sheetbox > .body{padding:16px 18px 20px}
+  .sheetbox > .body > p.lead{margin:0 0 16px;font-size:13px;color:var(--ink-2);max-width:60ch}
+  .clink{border:1px solid var(--grid);border-radius:var(--radius);margin:0 0 8px;background:var(--surface)}
+  .clink > .top{display:flex;align-items:center;gap:10px;padding:12px 14px}
+  .clink b{font-size:14px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .clink .state{font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:999px;
+    border:1px solid currentColor;white-space:nowrap}
+  .clink .state[data-on="true"]{color:var(--good)}
+  .clink .state[data-on="false"]{color:var(--ink-muted)}
+  .clink .state[data-on="none"]{color:var(--ink-muted);border-style:dashed}
+  .clink .opts{display:none;padding:0 14px 14px;border-top:1px solid var(--grid);margin-top:2px}
+  .clink[data-open="true"] .opts{display:block}
+  .clink .urlrow{display:flex;gap:6px;align-items:center;margin:12px 0 0}
+  .clink .urlrow input{flex:1;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+    padding:7px 9px;border:1px solid var(--grid);border-radius:8px;background:var(--plane);
+    color:var(--ink-2);min-width:0}
+  .clink .stat{margin:10px 0 0;font-size:12px;color:var(--ink-muted)}
   .toast{
     position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);
     background:var(--ink);color:#fff;padding:9px 16px;border-radius:999px;font-size:13px;
@@ -352,6 +391,8 @@
           <span id="meRole"></span>
         </div>
         <button id="guideBtn" role="menuitem">Run the guide</button>
+        <div class="sep"></div>
+        <button id="clientLinksBtn" role="menuitem">Client links</button>
         <div class="sep"></div>
         <button id="exportBtn" role="menuitem">Export a backup</button>
         <button id="importBtn" role="menuitem">Import a backup</button>
@@ -512,6 +553,19 @@
       <div class="linkchips" id="linkChips"></div>
     </div>
 
+    <div class="clientbox" id="clientBox">
+      <h4>Client link</h4>
+      <label class="checkrow">
+        <input type="checkbox" id="fld-cvis" checked>
+        <span>Show this task on the client's progress page</span>
+      </label>
+      <div class="field">
+        <label for="fld-cnote">What the client reads</label>
+        <textarea id="fld-cnote" placeholder="One line in plain English. Leave it empty to show only the task name and its status." style="min-height:52px"></textarea>
+        <p class="note">The brief, the links and the comments below never leave this board.</p>
+      </div>
+    </div>
+
     <div class="comments">
       <label style="display:block;font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-muted);font-weight:600">Comments</label>
       <div id="commentList"></div>
@@ -587,6 +641,22 @@
   </div>
 </div>
 
+<div class="sheet" id="linksSheet">
+  <div class="sheetbox" role="dialog" aria-modal="true" aria-labelledby="linksTitle">
+    <header>
+      <h2 id="linksTitle">Client links</h2>
+      <span style="flex:1"></span>
+      <button class="btn small" id="closeLinks">Close</button>
+    </header>
+    <div class="body">
+      <p class="lead">A read only page per client, showing their work and nothing else.
+        Send the link once, it stays current on its own. Anyone holding the link can open it,
+        so treat it like a shared document, and switch it off the moment you want it gone.</p>
+      <div id="linksList"></div>
+    </div>
+  </div>
+</div>
+
 <div class="confirm" id="confirmDelete">
   <div class="confirmbox" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle">
     <h2 id="confirmTitle">Delete this task?</h2>
@@ -658,6 +728,8 @@ function fromRow(r){
     links: r.links||'',
     waiting_on: r.waiting_on||'',
     waiting_since: r.waiting_since||'',
+    client_visible: r.client_visible !== false,
+    client_note: r.client_note||'',
     comments: (r.comments||[]).map(c=>({ id:c.id, author:nameOf(c.author), body:c.body, at:c.created_at })),
     created_by: nameOf(r.created_by),
     created_at: r.created_at, updated_at: r.updated_at
@@ -679,7 +751,9 @@ const ROW_FIELDS = {
   notes:          v => v,
   links:          v => v,
   waiting_on:     v => v,
-  waiting_since:  v => v || null
+  waiting_since:  v => v || null,
+  client_visible: v => !!v,
+  client_note:    v => v || ''
 };
 function toRow(t){
   const r = {};
@@ -732,8 +806,34 @@ const Store = {
     const { error } = await SB.from('tasks').insert(rows.map(toRow));
     if(error){ toast('Import failed'); console.error(error); return false; }
     return true;
+  },
+
+  // Client links. Row level security means only an admin gets anything back here,
+  // so a member opening this sees an empty list rather than a list of tokens.
+  async listClientLinks(){
+    const { data, error } = await SB.from('client_links').select('*').order('client');
+    if(error){ console.error(error); return []; }
+    return data || [];
+  },
+  async createClientLink(client){
+    const { data, error } = await SB.from('client_links')
+      .insert({ client, token:newToken() }).select().single();
+    if(error){ toast('Could not create the link'); console.error(error); return null; }
+    return data;
+  },
+  async updateClientLink(id, patch){
+    const { error } = await SB.from('client_links').update(patch).eq('id', id);
+    if(error){ toast('Could not save the link'); console.error(error); return false; }
+    return true;
   }
 };
+
+// 16 random bytes as hex, from the browser's crypto, not Math.random
+function newToken(){
+  const b = new Uint8Array(16);
+  crypto.getRandomValues(b);
+  return Array.from(b, x => x.toString(16).padStart(2,'0')).join('');
+}
 
 /* ============================================================
    3. STATE
@@ -981,7 +1081,7 @@ function openTask(id){
   EDITING = id ? TASKS.find(t=>t.id===id) : null;
   const t = EDITING || { client:'', project:'', title:'', type:TYPES[0], assignee:ME.name,
     priority:'medium', status:'not_started', date_started:'', due_date:'', date_completed:'', notes:'', links:'',
-    waiting_on:'', waiting_since:'', comments:[] };
+    waiting_on:'', waiting_since:'', client_visible:true, client_note:'', comments:[] };
   $('#modalTitle').textContent = EDITING ? 'Edit task' : 'New task';
   $('#fld-title').value = t.title;
   $('#fld-client').value = t.client;
@@ -996,6 +1096,8 @@ function openTask(id){
   $('#fld-notes').value = t.notes||'';
   $('#fld-links').value = t.links||'';
   $('#fld-waiting').value = t.waiting_on||'';
+  $('#fld-cvis').checked = t.client_visible !== false;
+  $('#fld-cnote').value = t.client_note||'';
   toggleWaiting(t.status, t.waiting_since);
   renderLinkChips();
   $('#newComment').value = '';
@@ -1055,7 +1157,9 @@ async function saveTask(){
     date_completed: $('#fld-completed').value,
     notes: $('#fld-notes').value.trim(),
     links: $('#fld-links').value.trim(),
-    waiting_on: $('#fld-waiting').value.trim()
+    waiting_on: $('#fld-waiting').value.trim(),
+    client_visible: $('#fld-cvis').checked,
+    client_note: $('#fld-cnote').value.trim()
   };
   if(!payload.title){ toast('Give the task a name'); return; }
 
@@ -1172,6 +1276,7 @@ async function init(){
   $('#meName').textContent = ME.name;
   $('#meRole').textContent = (ME.role==='admin' ? 'Admin' : 'Team member') + (ME.email ? ', ' + ME.email : '');
   $('#importBtn').classList.toggle('hidden', ME.role!=='admin');
+  $('#clientLinksBtn').classList.toggle('hidden', ME.role!=='admin');
 
   TASKS = await Store.list();
   refreshFilterOptions();
@@ -1351,7 +1456,8 @@ const STEPS = [
   { el:'#newTaskBtn', view:'board', place:'below',
     title:'Or the full panel',
     body:`<p>For real detail. Brief, due date, links to the drive folder, and the comment thread.</p>
-          <p>Comment here rather than on WhatsApp. In six weeks the reasoning sits with the task.</p>` },
+          <p>Comment here rather than on WhatsApp. In six weeks the reasoning sits with the task.</p>
+          <p>At the bottom sits <b>Client link</b>. What you write there is the only thing a client ever reads. The brief and the comments stay internal.</p>` },
 
   { el:'#tbl', view:'table', place:'below',
     title:'Everything at once',
@@ -1468,6 +1574,155 @@ $('#tourNext').addEventListener('click', ()=>{
 $('#tourBack').addEventListener('click', ()=>showStep(TOUR_AT - 1));
 $('#tourSkip').addEventListener('click', endTour);
 $('#guideBtn').addEventListener('click', ()=>{ setMenu(false); startTour(); });
+
+/* ============================================================
+   CLIENT LINKS
+   One read only page per client. The board holds the tokens,
+   the page at /p/ holds nothing and asks the database for
+   exactly the fields a client may see.
+   ============================================================ */
+let CLINKS = [];
+let OPEN_CLIENT = null;
+
+// works both on tasks.wecomeone.me and on the github.io address
+const linkBase = () => location.origin + location.pathname.replace(/\/[^\/]*$/, '/') + 'p/#';
+const norm = s => (s||'').trim().toLowerCase();
+
+function clientNames(){
+  const seen = new Map();
+  TASKS.forEach(t=>{ if(t.client && t.client.trim() && !seen.has(norm(t.client))) seen.set(norm(t.client), t.client.trim()); });
+  CLINKS.forEach(l=>{ if(!seen.has(norm(l.client))) seen.set(norm(l.client), l.client); });
+  return Array.from(seen.values()).sort((a,b)=>a.localeCompare(b));
+}
+
+function sharedCount(client){
+  const cutoff = new Date(Date.now() - 60*86400000).toISOString().slice(0,10);
+  const mine = TASKS.filter(t => norm(t.client) === norm(client));
+  const shown = mine.filter(t =>
+    t.client_visible !== false &&
+    !(t.status==='done' && t.date_completed && t.date_completed < cutoff));
+  return { shown: shown.length, total: mine.length };
+}
+
+function linkRowHTML(name){
+  const l = CLINKS.find(x => norm(x.client) === norm(name));
+  const c = sharedCount(name);
+  const open = OPEN_CLIENT === name;
+  const state = !l ? ['none','No link'] : (l.active ? ['true','Live'] : ['false','Switched off']);
+  const seen = !l ? '' : (l.view_count
+    ? `Opened ${l.view_count} time${l.view_count>1?'s':''}, last on ${new Date(l.last_viewed_at).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}`
+    : 'Not opened yet');
+
+  return `<div class="clink" data-client="${esc(name)}" data-open="${open}">
+    <div class="top">
+      <b>${esc(name)}</b>
+      <span class="state" data-on="${state[0]}">${state[1]}</span>
+      ${l
+        ? `<button class="btn small" data-act="copy">Copy link</button>
+           <button class="btn small" data-act="options">${open ? 'Hide' : 'Options'}</button>`
+        : `<button class="btn primary small" data-act="create">Create link</button>`}
+    </div>
+    ${l ? `<div class="opts">
+      <div class="urlrow">
+        <input readonly value="${esc(linkBase() + l.token)}" data-role="url">
+        <button class="btn small" data-act="open">Preview</button>
+      </div>
+      <p class="stat">Showing ${c.shown} of ${c.total} task${c.total===1?'':'s'} on this client. ${seen}</p>
+      <div class="field" style="margin-top:14px">
+        <label>Heading on the page</label>
+        <input data-f="headline" value="${esc(l.headline||'')}" placeholder="Leave empty to use the client name">
+      </div>
+      <div class="field">
+        <label>Opening line</label>
+        <textarea data-f="intro" style="min-height:56px" placeholder="Optional. A sentence of context, for example what this month covers.">${esc(l.intro||'')}</textarea>
+      </div>
+      <label class="checkrow">
+        <input type="checkbox" data-f="show_dates" ${l.show_dates ? 'checked' : ''}>
+        <span>Show dates. Turn this off if you would rather not put due dates in front of them.</span>
+      </label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn primary small" data-act="save">Save</button>
+        <button class="btn small" data-act="active">${l.active ? 'Switch the link off' : 'Switch it back on'}</button>
+        <span style="flex:1"></span>
+        <button class="btn small" data-act="rotate" title="The old address stops working immediately">Replace the link</button>
+      </div>
+    </div>` : ''}
+  </div>`;
+}
+
+function renderLinks(){
+  const names = clientNames();
+  $('#linksList').innerHTML = names.length
+    ? names.map(linkRowHTML).join('')
+    : `<p class="note">No clients on the board yet. Add a task with a client name and the link will be available here.</p>`;
+}
+
+async function openLinks(){
+  setMenu(false);
+  $('#linksSheet').dataset.open = 'true';
+  $('#linksList').innerHTML = '<p class="note">Loading</p>';
+  CLINKS = await Store.listClientLinks();
+  renderLinks();
+}
+function closeLinks(){ $('#linksSheet').dataset.open = 'false'; OPEN_CLIENT = null; }
+
+$('#clientLinksBtn').addEventListener('click', openLinks);
+$('#closeLinks').addEventListener('click', closeLinks);
+$('#linksSheet').addEventListener('click', e=>{ if(e.target.id === 'linksSheet') closeLinks(); });
+
+$('#linksList').addEventListener('click', async e=>{
+  const btn = e.target.closest('button[data-act]');
+  if(!btn) return;
+  const box  = btn.closest('.clink');
+  const name = box.dataset.client;
+  const l    = CLINKS.find(x => norm(x.client) === norm(name));
+  const act  = btn.dataset.act;
+
+  if(act === 'options'){ OPEN_CLIENT = (OPEN_CLIENT === name) ? null : name; renderLinks(); return; }
+
+  if(act === 'create'){
+    const made = await Store.createClientLink(name);
+    if(!made) return;
+    CLINKS.push(made); OPEN_CLIENT = name; renderLinks();
+    toast('Link created. Check what it shows before you send it');
+    return;
+  }
+  if(!l) return;
+
+  if(act === 'copy'){
+    const url = linkBase() + l.token;
+    try{ await navigator.clipboard.writeText(url); toast('Link copied'); }
+    catch(_){ const i = box.querySelector('[data-role="url"]'); if(i){ i.select(); } toast('Select the address and copy it'); }
+    return;
+  }
+  if(act === 'open'){ window.open(linkBase() + l.token, '_blank', 'noopener'); return; }
+
+  if(act === 'save'){
+    const patch = {
+      headline:   box.querySelector('[data-f="headline"]').value.trim(),
+      intro:      box.querySelector('[data-f="intro"]').value.trim(),
+      show_dates: box.querySelector('[data-f="show_dates"]').checked
+    };
+    if(await Store.updateClientLink(l.id, patch)){ Object.assign(l, patch); renderLinks(); toast('Saved'); }
+    return;
+  }
+  if(act === 'active'){
+    const next = !l.active;
+    if(await Store.updateClientLink(l.id, { active: next })){
+      l.active = next; renderLinks();
+      toast(next ? 'The link works again' : 'The link is dead. Anyone opening it sees nothing');
+    }
+    return;
+  }
+  if(act === 'rotate'){
+    const tok = newToken();
+    if(await Store.updateClientLink(l.id, { token: tok })){
+      l.token = tok; renderLinks();
+      toast('New address. The one you sent before no longer works');
+    }
+    return;
+  }
+});
 window.addEventListener('resize', ()=>{ if(TOUR_ON) place(STEPS[TOUR_AT]); });
 document.addEventListener('keydown', e=>{
   if(!TOUR_ON) return;
@@ -1629,6 +1884,7 @@ $('#fileInput').addEventListener('change', async e=>{
 });
 document.addEventListener('keydown', e=>{
   if(e.key==='Escape' && $('#confirmDelete').dataset.open === 'true'){ closeConfirm(); return; }
+  if(e.key==='Escape' && $('#linksSheet').dataset.open === 'true'){ closeLinks(); return; }
   if(e.key==='Escape') closeModal();
   if(e.key==='n' && $('#confirmDelete').dataset.open !== 'true'
      && !/input|textarea|select/i.test(document.activeElement.tagName)) { e.preventDefault(); openTask(null); }

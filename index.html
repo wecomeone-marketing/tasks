@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wecomeone Task Board</title>
+<style>
+  :root{
+    --plane:#f9f9f7;
+    --surface:#fcfcfb;
+    --ink:#0b0b0b;
+    --ink-2:#52514e;
+    --ink-muted:#898781;
+    --grid:#e1e0d9;
+    --line:#c3c2b7;
+    --ring:rgba(11,11,11,0.10);
+    --blue:#2a78d6;
+    --blue-100:#cde2fb;
+    --blue-250:#86b6ef;
+    --good:#0ca30c;
+    --warning:#fab219;
+    --serious:#ec835a;
+    --critical:#d03b3b;
+    --radius:10px;
+    --shadow:0 1px 2px rgba(11,11,11,.05), 0 8px 24px rgba(11,11,11,.06);
+    color-scheme:light;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--plane);
+    color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+    font-size:14px;
+    line-height:1.45;
+  }
+  button,input,select,textarea{font:inherit;color:inherit}
+  .wrap{max-width:1400px;margin:0 auto;padding:0 20px 60px}
+
+  /* Top bar */
+  header.top{
+    position:sticky;top:0;z-index:40;
+    background:rgba(249,249,247,.92);
+    backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--grid);
+  }
+  .top-inner{max-width:1400px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  .brand{display:flex;align-items:baseline;gap:10px;margin-right:auto}
+  .brand strong{font-size:16px;letter-spacing:-.01em}
+  .brand span{color:var(--ink-muted);font-size:12px}
+  .saved{font-size:12px;color:var(--ink-muted);white-space:nowrap}
+  .tabs{display:flex;gap:2px;background:#efeee9;padding:3px;border-radius:999px}
+  .tabs button{
+    border:0;background:transparent;padding:6px 14px;border-radius:999px;
+    cursor:pointer;color:var(--ink-2);font-weight:500;
+  }
+  .tabs button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(11,11,11,.08)}
+  .btn{
+    border:1px solid var(--ring);background:var(--surface);padding:7px 13px;border-radius:8px;
+    cursor:pointer;font-weight:500;
+  }
+  .btn:hover{background:#f2f1ec}
+  .btn.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .btn.primary:hover{background:#292928}
+  .btn.danger{color:var(--critical);border-color:rgba(208,59,59,.3)}
+  .btn.small{padding:4px 9px;font-size:12px;border-radius:6px}
+  .who{display:flex;align-items:center;gap:8px}
+  .avatar{
+    width:26px;height:26px;border-radius:999px;background:var(--blue-250);color:#0d366b;
+    display:grid;place-items:center;font-size:11px;font-weight:700;flex:none;
+  }
+  select.who-select{border:1px solid var(--ring);background:var(--surface);padding:6px 8px;border-radius:8px}
+
+  /* Filters */
+  .filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:14px 0 16px}
+  .filters input[type=search],.filters select{
+    border:1px solid var(--ring);background:var(--surface);padding:7px 10px;border-radius:8px;
+  }
+  .filters input[type=search]{min-width:230px}
+  .toggle{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--ring);background:var(--surface);
+    padding:6px 11px;border-radius:999px;cursor:pointer;user-select:none}
+  .toggle[data-on="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .spacer{flex:1}
+  .count{color:var(--ink-muted);font-size:12px}
+
+  /* Cards & panels */
+  .panel{background:var(--surface);border:1px solid var(--grid);border-radius:var(--radius)}
+  .panel h3{margin:0;padding:14px 16px 0;font-size:13px;font-weight:600;letter-spacing:.01em}
+  .panel .body{padding:14px 16px 16px}
+
+  /* KPI row */
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:14px}
+  .kpi{background:var(--surface);border:1px solid var(--grid);border-radius:var(--radius);padding:14px 16px}
+  .kpi .label{font-size:12px;color:var(--ink-2);display:flex;align-items:center;gap:6px}
+  .kpi .value{font-size:30px;font-weight:600;letter-spacing:-.02em;margin-top:6px;line-height:1}
+  .kpi .sub{font-size:12px;color:var(--ink-muted);margin-top:4px}
+  .dot{width:8px;height:8px;border-radius:2px;flex:none;display:inline-block}
+
+  .grid-2{display:grid;grid-template-columns:1.15fr .85fr;gap:12px}
+  @media(max-width:900px){.grid-2{grid-template-columns:1fr}}
+
+  /* Bar rows */
+  .rowbar{display:grid;grid-template-columns:minmax(120px,1.1fr) 1fr auto;gap:12px;align-items:center;padding:7px 0}
+  .rowbar + .rowbar{border-top:1px solid var(--grid)}
+  .rowbar .name{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .track{height:10px;background:#efeee9;border-radius:4px;overflow:hidden;display:flex;gap:2px}
+  .track i{display:block;height:100%;border-radius:4px}
+  .rowbar .num{font-size:12px;color:var(--ink-2);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--ink-2);margin-top:12px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+
+  /* Board */
+  .board{display:grid;grid-template-columns:repeat(5,minmax(215px,1fr));gap:12px;overflow-x:auto;padding-bottom:8px}
+  .col{background:var(--surface);border:1px solid var(--grid);border-radius:var(--radius);display:flex;flex-direction:column;min-height:180px}
+  .col > header{padding:11px 13px;border-bottom:1px solid var(--grid);display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600}
+  .col > header .n{margin-left:auto;color:var(--ink-muted);font-weight:500;font-variant-numeric:tabular-nums}
+  .col .stack{padding:10px;display:flex;flex-direction:column;gap:9px;flex:1}
+  .col.drop{background:#f4f8fe;border-color:var(--blue-250)}
+  .card{
+    background:var(--surface);border:1px solid var(--grid);border-radius:9px;padding:10px 11px;cursor:pointer;
+    box-shadow:0 1px 1px rgba(11,11,11,.03);
+  }
+  .card:hover{border-color:var(--line)}
+  .card .client{font-size:11px;color:var(--ink-muted);text-transform:uppercase;letter-spacing:.04em}
+  .card .title{font-weight:550;margin:3px 0 7px;font-size:13.5px}
+  .card .meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .chip{
+    display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:2px 7px;border-radius:999px;
+    border:1px solid var(--ring);background:#fbfaf7;color:var(--ink-2);white-space:nowrap;
+  }
+  .chip.due-over{border-color:rgba(208,59,59,.35);color:#a52c2c;background:#fdf3f3}
+  .chip.due-soon{border-color:rgba(250,178,25,.45);color:#7a5300;background:#fdf8ec}
+  .mini-av{width:20px;height:20px;font-size:9.5px}
+
+  /* Table */
+  .tablewrap{background:var(--surface);border:1px solid var(--grid);border-radius:var(--radius);overflow:auto}
+  table{border-collapse:collapse;width:100%;font-size:13px}
+  th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--grid);vertical-align:middle;white-space:nowrap}
+  th{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-muted);font-weight:600;cursor:pointer;position:sticky;top:0;background:var(--surface);z-index:2}
+  th:hover{color:var(--ink-2)}
+  tbody tr:hover{background:#f7f6f2}
+  td.taskcell{white-space:normal;min-width:250px;font-weight:500}
+  td.num{font-variant-numeric:tabular-nums}
+  tr.overdue td.due{color:#a52c2c;font-weight:600}
+  .rowlink{cursor:pointer}
+
+  /* Modal */
+  .scrim{position:fixed;inset:0;background:rgba(11,11,11,.35);display:none;z-index:60}
+  .scrim[data-open="true"]{display:block}
+  .modal{
+    position:fixed;z-index:70;top:0;right:0;bottom:0;width:min(560px,100%);
+    background:var(--surface);border-left:1px solid var(--grid);box-shadow:var(--shadow);
+    display:none;flex-direction:column;
+  }
+  .modal[data-open="true"]{display:flex}
+  .modal header{padding:14px 18px;border-bottom:1px solid var(--grid);display:flex;align-items:center;gap:10px}
+  .modal header h2{font-size:15px;margin:0;font-weight:600}
+  .modal .content{padding:16px 18px;overflow:auto;flex:1}
+  .modal footer{padding:12px 18px;border-top:1px solid var(--grid);display:flex;gap:8px;align-items:center}
+  .field{margin-bottom:13px}
+  .field label{display:block;font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-muted);margin-bottom:5px;font-weight:600}
+  .field input,.field select,.field textarea{
+    width:100%;border:1px solid var(--ring);background:#fff;padding:8px 10px;border-radius:8px;
+  }
+  .field textarea{min-height:70px;resize:vertical}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .comments{margin-top:6px;border-top:1px solid var(--grid);padding-top:14px}
+  .comment{display:flex;gap:9px;padding:9px 0}
+  .comment + .comment{border-top:1px solid var(--grid)}
+  .comment .b{flex:1}
+  .comment .who-line{font-size:12px;color:var(--ink-2)}
+  .comment .who-line b{color:var(--ink)}
+  .comment .when{color:var(--ink-muted);font-size:11.5px}
+  .comment p{margin:3px 0 0;font-size:13px;white-space:pre-wrap}
+  .addcomment{display:flex;gap:8px;margin-top:10px}
+  .addcomment textarea{flex:1;min-height:42px}
+  .empty{padding:40px 20px;text-align:center;color:var(--ink-muted)}
+  .hidden{display:none !important}
+  .note{font-size:12px;color:var(--ink-muted);margin:4px 0 0}
+  .login{position:fixed;inset:0;z-index:100;background:var(--plane);display:grid;place-items:center;padding:20px}
+  .login.hidden{display:none}
+  .loginbox{background:var(--surface);border:1px solid var(--grid);border-radius:14px;padding:28px;width:min(380px,100%);box-shadow:var(--shadow)}
+  .loginbox h1{font-size:20px;margin:0;letter-spacing:-.01em}
+  .loginbox .sub{margin:4px 0 20px;color:var(--ink-muted);font-size:12.5px}
+  .loginmsg{font-size:12.5px;margin:10px 0 0;min-height:16px;color:var(--critical)}
+  .loginmsg.ok{color:#006300}
+  .linky{background:none;border:0;padding:0;margin-top:10px;color:var(--ink-2);font-size:12.5px;text-decoration:underline;cursor:pointer}
+  .booting{position:fixed;inset:0;z-index:110;background:var(--plane);display:grid;place-items:center;color:var(--ink-muted);font-size:13px}
+  .booting.hidden{display:none}
+  .toast{
+    position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);
+    background:var(--ink);color:#fff;padding:9px 16px;border-radius:999px;font-size:13px;
+    opacity:0;pointer-events:none;transition:.2s;z-index:90;
+  }
+  .toast[data-show="true"]{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div class="booting" id="booting">Loading the board</div>
+
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">
+      <strong>Task Board</strong>
+      <span>Wecomeone Marketing And Comms</span>
+    </div>
+    <div class="tabs" role="tablist">
+      <button role="tab" data-view="dashboard" aria-selected="true">Dashboard</button>
+      <button role="tab" data-view="board" aria-selected="false">Board</button>
+      <button role="tab" data-view="table" aria-selected="false">Table</button>
+    </div>
+    <div class="who">
+      <div class="avatar" id="meAvatar"></div>
+      <span id="meName" style="font-size:13px"></span>
+      <button class="btn small" id="signOutBtn">Sign out</button>
+    </div>
+    <button class="btn primary" id="newTaskBtn">New task</button>
+    <button class="btn small" id="exportBtn" title="Download a JSON backup">Export</button>
+    <button class="btn small" id="importBtn" title="Restore from a JSON backup">Import</button>
+    <span class="saved" id="savedAt">Loading</span>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="filters">
+    <input type="search" id="q" placeholder="Search task, project or comment">
+    <select id="fClient"><option value="">All clients</option></select>
+    <select id="fAssignee"><option value="">All assignees</option></select>
+    <select id="fStatus"><option value="">All statuses</option></select>
+    <select id="fPriority"><option value="">All priorities</option></select>
+    <select id="fType"><option value="">All task types</option></select>
+    <button class="toggle" id="tMine" data-on="false">My tasks</button>
+    <button class="toggle" id="tOverdue" data-on="false">Overdue only</button>
+    <button class="btn small" id="clearFilters">Clear</button>
+    <span class="spacer"></span>
+    <span class="count" id="resultCount"></span>
+  </div>
+
+  <!-- DASHBOARD -->
+  <section id="view-dashboard">
+    <div class="kpis" id="kpis"></div>
+    <div class="grid-2">
+      <div class="panel">
+        <h3>Progress by client</h3>
+        <div class="body" id="byClient"></div>
+      </div>
+      <div class="panel">
+        <h3>Workload by assignee</h3>
+        <div class="body" id="byAssignee"></div>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:12px">
+      <h3>Needs attention</h3>
+      <div class="body" id="attention"></div>
+    </div>
+  </section>
+
+  <!-- BOARD -->
+  <section id="view-board" class="hidden">
+    <div class="board" id="board"></div>
+    <p class="note">Drag a card into another column to change its status. The date completed field fills in automatically when a task lands in Done.</p>
+  </section>
+
+  <!-- TABLE -->
+  <section id="view-table" class="hidden">
+    <div class="tablewrap">
+      <table id="tbl">
+        <thead>
+          <tr>
+            <th data-sort="client">Client</th>
+            <th data-sort="project">Project</th>
+            <th data-sort="title">Task</th>
+            <th data-sort="type">Type</th>
+            <th data-sort="assignee">Assignee</th>
+            <th data-sort="priority">Priority</th>
+            <th data-sort="status">Status</th>
+            <th data-sort="started">Started</th>
+            <th data-sort="due">Due</th>
+            <th data-sort="completed">Completed</th>
+            <th data-sort="comments">Notes</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="modal" id="modal" aria-modal="true" role="dialog">
+  <header>
+    <h2 id="modalTitle">Task</h2>
+    <span class="spacer" style="flex:1"></span>
+    <button class="btn small" id="closeModal">Close</button>
+  </header>
+  <div class="content">
+    <div class="field">
+      <label for="fld-title">Task</label>
+      <input id="fld-title" placeholder="What needs doing">
+    </div>
+    <div class="two">
+      <div class="field">
+        <label for="fld-client">Client</label>
+        <input id="fld-client" list="clientList" placeholder="Client name">
+        <datalist id="clientList"></datalist>
+      </div>
+      <div class="field">
+        <label for="fld-project">Project</label>
+        <input id="fld-project" list="projectList" placeholder="Project or retainer">
+        <datalist id="projectList"></datalist>
+      </div>
+    </div>
+    <div class="two">
+      <div class="field">
+        <label for="fld-type">Task type</label>
+        <select id="fld-type"></select>
+      </div>
+      <div class="field">
+        <label for="fld-assignee">Assignee</label>
+        <select id="fld-assignee"></select>
+      </div>
+    </div>
+    <div class="two">
+      <div class="field">
+        <label for="fld-status">Status</label>
+        <select id="fld-status"></select>
+      </div>
+      <div class="field">
+        <label for="fld-priority">Priority</label>
+        <select id="fld-priority"></select>
+      </div>
+    </div>
+    <div class="two">
+      <div class="field">
+        <label for="fld-started">Date started</label>
+        <input id="fld-started" type="date">
+      </div>
+      <div class="field">
+        <label for="fld-due">Due date</label>
+        <input id="fld-due" type="date">
+      </div>
+    </div>
+    <div class="field">
+      <label for="fld-completed">Date completed</label>
+      <input id="fld-completed" type="date">
+    </div>
+    <div class="field">
+      <label for="fld-notes">Brief</label>
+      <textarea id="fld-notes" placeholder="Scope, deliverable, links"></textarea>
+    </div>
+
+    <div class="comments">
+      <label style="display:block;font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-muted);font-weight:600">Comments</label>
+      <div id="commentList"></div>
+      <div class="addcomment">
+        <textarea id="newComment" placeholder="Add an update for the team"></textarea>
+        <button class="btn" id="addCommentBtn">Post</button>
+      </div>
+      <p class="note" id="auditLine"></p>
+    </div>
+  </div>
+  <footer>
+    <button class="btn primary" id="saveTask">Save task</button>
+    <button class="btn danger hidden" id="deleteTask">Delete</button>
+    <span style="flex:1"></span>
+    <span class="note" id="roleNote"></span>
+  </footer>
+</aside>
+
+<div class="login" id="login">
+  <form class="loginbox" id="loginForm">
+    <h1>Task Board</h1>
+    <p class="sub">Wecomeone Marketing And Comms</p>
+    <div class="field">
+      <label for="loginEmail">Email</label>
+      <input id="loginEmail" type="email" autocomplete="username" required>
+    </div>
+    <div class="field">
+      <label for="loginPass">Password</label>
+      <input id="loginPass" type="password" autocomplete="current-password" required>
+    </div>
+    <button class="btn primary" type="submit" id="loginBtn" style="width:100%">Sign in</button>
+    <p class="loginmsg" id="loginMsg"></p>
+    <button type="button" class="linky" id="forgotBtn">Forgot your password</button>
+  </form>
+</div>
+
+<div class="toast" id="toast"></div>
+<input type="file" id="fileInput" accept="application/json" class="hidden">
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+/* ============================================================
+   1. CONFIG
+   ============================================================ */
+const CONFIG = {
+  supabaseUrl: 'https://nubkifzfuvmmuwwiqwkk.supabase.co',
+  supabaseKey: 'sb_publishable_yBzBj3_8fMXIYz5gzJ_3Lw_mOgKYv-J'
+};
+if(!window.supabase){
+  document.addEventListener('DOMContentLoaded', ()=>{
+    document.getElementById('booting').innerHTML =
+      'The board could not load its database library.<br>Check your internet connection and refresh the page.';
+  });
+  throw new Error('supabase-js failed to load');
+}
+const SB = window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey);
+
+const STATUSES = [
+  { key:'not_started', label:'Not started', color:'#898781' },
+  { key:'in_progress', label:'In progress', color:'#2a78d6' },
+  { key:'blocked',     label:'Blocked',     color:'#d03b3b' },
+  { key:'review',      label:'Review',      color:'#fab219' },
+  { key:'done',        label:'Done',        color:'#0ca30c' }
+];
+const PRIORITIES = [
+  { key:'low',    label:'Low',    color:'#898781' },
+  { key:'medium', label:'Medium', color:'#2a78d6' },
+  { key:'high',   label:'High',   color:'#ec835a' },
+  { key:'urgent', label:'Urgent', color:'#d03b3b' }
+];
+const TYPES = ['Content','Design','Paid ads','SEO','Web','Video','Social','Client admin','Strategy'];
+
+let USERS = [];   // loaded from the profiles table after sign in
+
+/* ============================================================
+   2. STORAGE LAYER
+   Rows go in and out of Supabase here and nowhere else.
+   Everything above this line works on plain task objects.
+   ============================================================ */
+const nameOf = id => (USERS.find(u=>u.id===id)||{}).name || '';
+const idOf   = name => (USERS.find(u=>u.name===name)||{}).id || null;
+
+function fromRow(r){
+  return {
+    id: r.id,
+    client: r.client||'', project: r.project||'', title: r.title||'',
+    type: r.type||'', assignee: nameOf(r.assignee),
+    priority: r.priority, status: r.status,
+    date_started: r.date_started||'', due_date: r.due_date||'', date_completed: r.date_completed||'',
+    notes: r.notes||'',
+    comments: (r.comments||[]).map(c=>({ id:c.id, author:nameOf(c.author), body:c.body, at:c.created_at })),
+    created_by: nameOf(r.created_by),
+    created_at: r.created_at, updated_at: r.updated_at
+  };
+}
+function toRow(t){
+  const r = {
+    client:t.client, project:t.project, title:t.title, type:t.type,
+    assignee: idOf(t.assignee), priority:t.priority, status:t.status,
+    date_started: t.date_started || null,
+    due_date: t.due_date || null,
+    date_completed: t.date_completed || null,
+    notes: t.notes
+  };
+  Object.keys(r).forEach(k => r[k] === undefined && delete r[k]);
+  return r;
+}
+
+const Store = {
+  async loadProfiles(){
+    const { data, error } = await SB.from('profiles').select('id, full_name, email, role').order('full_name');
+    if(error) throw error;
+    USERS = data.map(p=>({ id:p.id, name:p.full_name, email:p.email, role:p.role }));
+    return USERS;
+  },
+  async list(){
+    const { data, error } = await SB
+      .from('tasks')
+      .select('*, comments(id, body, author, created_at)')
+      .order('updated_at', { ascending:false });
+    if(error){ toast('Could not load tasks'); console.error(error); return []; }
+    stampSaved();
+    return data.map(fromRow);
+  },
+  async create(t){
+    const { data, error } = await SB.from('tasks').insert(toRow(t)).select().single();
+    if(error){ toast('Could not save'); console.error(error); return null; }
+    stampSaved();
+    return fromRow(data);
+  },
+  async update(id, patch){
+    const { error } = await SB.from('tasks').update(toRow(patch)).eq('id', id);
+    if(error){ toast('Could not save'); console.error(error); return null; }
+    stampSaved();
+    return true;
+  },
+  async remove(id){
+    const { error } = await SB.from('tasks').delete().eq('id', id);
+    if(error){ toast(ME.role==='admin' ? 'Could not delete' : 'Only an admin can delete'); console.error(error); return; }
+    stampSaved();
+  },
+  async addComment(taskId, body){
+    const { error } = await SB.from('comments').insert({ task_id:taskId, body, author:ME.id });
+    if(error){ toast('Could not post the comment'); console.error(error); return false; }
+    stampSaved();
+    return true;
+  },
+  async bulkInsert(rows){
+    const { error } = await SB.from('tasks').insert(rows.map(toRow));
+    if(error){ toast('Import failed'); console.error(error); return false; }
+    return true;
+  }
+};
+
+/* ============================================================
+   3. STATE
+   ============================================================ */
+let TASKS = [];
+let ME = null;
+let VIEW = 'dashboard';
+let SORT = { key:'due', dir:1 };
+let EDITING = null;
+const F = { q:'', client:'', assignee:'', status:'', priority:'', type:'', mine:false, overdue:false };
+
+const $  = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const todayISO = () => new Date().toISOString().slice(0,10);
+const esc = s => (s??'').toString().replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const initials = n => (n||'?').trim().split(/\s+/).map(x=>x[0]).slice(0,2).join('').toUpperCase();
+const statusOf = k => STATUSES.find(s=>s.key===k) || STATUSES[0];
+const prioOf   = k => PRIORITIES.find(p=>p.key===k) || PRIORITIES[0];
+const fmtDate = d => d ? new Date(d+'T00:00:00').toLocaleDateString('en-GB',{day:'2-digit',month:'short'}) : '';
+const daysTo = d => d ? Math.round((new Date(d+'T00:00:00') - new Date(todayISO()+'T00:00:00'))/86400000) : null;
+const isOverdue = t => t.status!=='done' && t.due_date && daysTo(t.due_date) < 0;
+
+function stampSaved(){
+  const el = $('#savedAt');
+  if(el) el.textContent = 'Saved ' + new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+}
+function toast(msg){
+  const el = $('#toast');
+  el.textContent = msg;
+  el.dataset.show = 'true';
+  clearTimeout(el._t);
+  el._t = setTimeout(()=>el.dataset.show='false', 1800);
+}
+
+/* ============================================================
+   5. FILTERING
+   ============================================================ */
+function filtered(){
+  const q = F.q.trim().toLowerCase();
+  return TASKS.filter(t=>{
+    if(F.client && t.client!==F.client) return false;
+    if(F.assignee && t.assignee!==F.assignee) return false;
+    if(F.status && t.status!==F.status) return false;
+    if(F.priority && t.priority!==F.priority) return false;
+    if(F.type && t.type!==F.type) return false;
+    if(F.mine && t.assignee!==ME.name) return false;
+    if(F.overdue && !isOverdue(t)) return false;
+    if(q){
+      const hay = [t.title,t.project,t.client,t.notes,t.assignee,(t.comments||[]).map(c=>c.body).join(' ')].join(' ').toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+/* ============================================================
+   6. RENDER
+   ============================================================ */
+function render(){
+  const rows = filtered();
+  $('#resultCount').textContent = rows.length + ' of ' + TASKS.length + ' tasks';
+  if(VIEW==='dashboard') renderDashboard(rows);
+  if(VIEW==='board') renderBoard(rows);
+  if(VIEW==='table') renderTable(rows);
+}
+
+function kpiTile(label, value, sub, color){
+  return `<div class="kpi">
+    <div class="label">${color?`<span class="dot" style="background:${color}"></span>`:''}${esc(label)}</div>
+    <div class="value">${value}</div>
+    <div class="sub">${esc(sub||'')}</div>
+  </div>`;
+}
+
+function renderDashboard(rows){
+  const open = rows.filter(t=>t.status!=='done');
+  const counts = {};
+  STATUSES.forEach(s=>counts[s.key] = rows.filter(t=>t.status===s.key).length);
+  const overdue = rows.filter(isOverdue).length;
+  const dueSoon = open.filter(t=>t.due_date && daysTo(t.due_date)>=0 && daysTo(t.due_date)<=7).length;
+  const doneThisMonth = rows.filter(t=>t.date_completed && t.date_completed.slice(0,7)===todayISO().slice(0,7)).length;
+
+  $('#kpis').innerHTML =
+    kpiTile('Open tasks', open.length, counts.not_started + ' not started') +
+    kpiTile('In progress', counts.in_progress, 'Active work', '#2a78d6') +
+    kpiTile('Blocked', counts.blocked, 'Needs a decision', '#d03b3b') +
+    kpiTile('Overdue', overdue, dueSoon + ' due within 7 days', '#d03b3b') +
+    kpiTile('In review', counts.review, 'Waiting on approval', '#fab219') +
+    kpiTile('Completed this month', doneThisMonth, 'Across all clients', '#0ca30c');
+
+  // Progress by client: stacked status bar, ordered, plus done ratio
+  const clients = [...new Set(rows.map(t=>t.client))].sort();
+  $('#byClient').innerHTML = clients.length ? clients.map(cl=>{
+    const list = rows.filter(t=>t.client===cl);
+    const total = list.length;
+    const segs = STATUSES.map(s=>{
+      const n = list.filter(t=>t.status===s.key).length;
+      return n ? `<i style="background:${s.color};width:${(n/total*100).toFixed(2)}%" title="${s.label}: ${n}"></i>` : '';
+    }).join('');
+    const done = list.filter(t=>t.status==='done').length;
+    return `<div class="rowbar">
+      <span class="name" title="${esc(cl)}">${esc(cl)}</span>
+      <span class="track">${segs}</span>
+      <span class="num">${done}/${total} done</span>
+    </div>`;
+  }).join('') + `<div class="legend">${STATUSES.map(s=>`<span><span class="dot" style="background:${s.color}"></span>${s.label}</span>`).join('')}</div>`
+   : '<div class="empty">No tasks match the current filters.</div>';
+
+  // Workload by assignee: open tasks only, single hue, with overdue count called out
+  const people = [...new Set(rows.map(t=>t.assignee))].sort();
+  const maxOpen = Math.max(1, ...people.map(p=>rows.filter(t=>t.assignee===p && t.status!=='done').length));
+  $('#byAssignee').innerHTML = people.length ? people.map(p=>{
+    const mine = rows.filter(t=>t.assignee===p);
+    const openN = mine.filter(t=>t.status!=='done').length;
+    const od = mine.filter(isOverdue).length;
+    return `<div class="rowbar">
+      <span class="name">${esc(p)}</span>
+      <span class="track"><i style="background:#2a78d6;width:${(openN/maxOpen*100).toFixed(2)}%"></i></span>
+      <span class="num">${openN} open${od?` <span style="color:#a52c2c">${od} overdue</span>`:''}</span>
+    </div>`;
+  }).join('') + `<div class="legend"><span><span class="dot" style="background:#2a78d6"></span>Open tasks</span></div>`
+   : '<div class="empty">No tasks match the current filters.</div>';
+
+  // Needs attention
+  const att = rows.filter(t=> isOverdue(t) || t.status==='blocked' || (t.priority==='urgent' && t.status!=='done'))
+    .sort((a,b)=> (a.due_date||'9999').localeCompare(b.due_date||'9999'));
+  $('#attention').innerHTML = att.length ? `<table style="width:100%"><tbody>${att.map(t=>{
+    const s = statusOf(t.status);
+    const od = isOverdue(t);
+    return `<tr class="rowlink" data-id="${t.id}">
+      <td style="width:1%"><span class="chip"><span class="dot" style="background:${s.color}"></span>${s.label}</span></td>
+      <td class="taskcell">${esc(t.title)}<div style="font-size:12px;color:var(--ink-muted);font-weight:400">${esc(t.client)} · ${esc(t.project)}</div></td>
+      <td style="width:1%">${esc(t.assignee)}</td>
+      <td style="width:1%;${od?'color:#a52c2c;font-weight:600':''}">${t.due_date?('Due '+fmtDate(t.due_date)):'No date'}</td>
+    </tr>`;
+  }).join('')}</tbody></table>` : '<div class="empty">Nothing overdue, blocked or urgent. Good place to be.</div>';
+}
+
+function cardHTML(t){
+  const p = prioOf(t.priority);
+  const dtd = daysTo(t.due_date);
+  let dueCls = '', dueTxt = '';
+  if(t.due_date && t.status!=='done'){
+    if(dtd<0){ dueCls='due-over'; dueTxt = 'Overdue ' + Math.abs(dtd) + 'd'; }
+    else if(dtd<=3){ dueCls='due-soon'; dueTxt = dtd===0 ? 'Due today' : 'Due in ' + dtd + 'd'; }
+    else dueTxt = 'Due ' + fmtDate(t.due_date);
+  } else if(t.date_completed){
+    dueTxt = 'Done ' + fmtDate(t.date_completed);
+  }
+  const nComments = (t.comments||[]).length;
+  return `<div class="card" draggable="true" data-id="${t.id}">
+    <div class="client">${esc(t.client)}</div>
+    <div class="title">${esc(t.title)}</div>
+    <div class="meta">
+      <span class="avatar mini-av" title="${esc(t.assignee)}">${initials(t.assignee)}</span>
+      <span class="chip"><span class="dot" style="background:${p.color}"></span>${p.label}</span>
+      ${dueTxt?`<span class="chip ${dueCls}">${dueTxt}</span>`:''}
+      ${nComments?`<span class="chip">${nComments} note${nComments>1?'s':''}</span>`:''}
+    </div>
+  </div>`;
+}
+
+function renderBoard(rows){
+  $('#board').innerHTML = STATUSES.map(s=>{
+    const list = rows.filter(t=>t.status===s.key)
+      .sort((a,b)=> (a.due_date||'9999').localeCompare(b.due_date||'9999'));
+    return `<div class="col" data-status="${s.key}">
+      <header><span class="dot" style="background:${s.color}"></span>${s.label}<span class="n">${list.length}</span></header>
+      <div class="stack">${list.map(cardHTML).join('') || '<div class="empty" style="padding:18px 8px;font-size:12px">Nothing here</div>'}</div>
+    </div>`;
+  }).join('');
+  wireBoard();
+}
+
+function renderTable(rows){
+  const dir = SORT.dir;
+  const val = (t,k)=>({
+    client:t.client, project:t.project, title:t.title, type:t.type, assignee:t.assignee,
+    priority:PRIORITIES.findIndex(p=>p.key===t.priority),
+    status:STATUSES.findIndex(s=>s.key===t.status),
+    started:t.date_started||'', due:t.due_date||'9999-12-31', completed:t.date_completed||'',
+    comments:(t.comments||[]).length
+  })[k];
+  const sorted = rows.slice().sort((a,b)=>{
+    const x=val(a,SORT.key), y=val(b,SORT.key);
+    if(typeof x==='number') return (x-y)*dir;
+    return String(x).localeCompare(String(y))*dir;
+  });
+  $('#tbody').innerHTML = sorted.length ? sorted.map(t=>{
+    const s = statusOf(t.status), p = prioOf(t.priority);
+    return `<tr class="rowlink ${isOverdue(t)?'overdue':''}" data-id="${t.id}">
+      <td>${esc(t.client)}</td>
+      <td>${esc(t.project)}</td>
+      <td class="taskcell">${esc(t.title)}</td>
+      <td>${esc(t.type)}</td>
+      <td><span class="avatar mini-av" style="display:inline-grid;vertical-align:middle;margin-right:6px">${initials(t.assignee)}</span>${esc(t.assignee)}</td>
+      <td><span class="chip"><span class="dot" style="background:${p.color}"></span>${p.label}</span></td>
+      <td><span class="chip"><span class="dot" style="background:${s.color}"></span>${s.label}</span></td>
+      <td class="num">${fmtDate(t.date_started)}</td>
+      <td class="num due">${fmtDate(t.due_date)}</td>
+      <td class="num">${fmtDate(t.date_completed)}</td>
+      <td class="num">${(t.comments||[]).length||''}</td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="11"><div class="empty">No tasks match the current filters.</div></td></tr>`;
+}
+
+/* ============================================================
+   7. MODAL
+   ============================================================ */
+function openTask(id){
+  EDITING = id ? TASKS.find(t=>t.id===id) : null;
+  const t = EDITING || { client:'', project:'', title:'', type:TYPES[0], assignee:ME.name,
+    priority:'medium', status:'not_started', date_started:'', due_date:'', date_completed:'', notes:'', comments:[] };
+  $('#modalTitle').textContent = EDITING ? 'Edit task' : 'New task';
+  $('#fld-title').value = t.title;
+  $('#fld-client').value = t.client;
+  $('#fld-project').value = t.project;
+  $('#fld-type').value = t.type;
+  $('#fld-assignee').value = t.assignee;
+  $('#fld-status').value = t.status;
+  $('#fld-priority').value = t.priority;
+  $('#fld-started').value = t.date_started||'';
+  $('#fld-due').value = t.due_date||'';
+  $('#fld-completed').value = t.date_completed||'';
+  $('#fld-notes').value = t.notes||'';
+  $('#newComment').value = '';
+  renderComments(t);
+  $('#auditLine').textContent = EDITING ? `Created by ${t.created_by||'unknown'} · last updated ${new Date(t.updated_at||Date.now()).toLocaleString('en-GB')}` : '';
+  $('#deleteTask').classList.toggle('hidden', !EDITING || ME.role!=='admin');
+  $('#roleNote').textContent = ME.role==='admin' ? 'Signed in as admin' : 'Members can edit and comment, admins can delete';
+  $('#scrim').dataset.open='true';
+  $('#modal').dataset.open='true';
+  setTimeout(()=>$('#fld-title').focus(), 30);
+}
+function closeModal(){
+  $('#scrim').dataset.open='false';
+  $('#modal').dataset.open='false';
+  EDITING = null;
+}
+function renderComments(t){
+  const list = (t.comments||[]).slice().sort((a,b)=>a.at.localeCompare(b.at));
+  $('#commentList').innerHTML = list.length ? list.map(c=>`
+    <div class="comment">
+      <span class="avatar mini-av">${initials(c.author)}</span>
+      <div class="b">
+        <div class="who-line"><b>${esc(c.author)}</b> <span class="when">${new Date(c.at).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</span></div>
+        <p>${esc(c.body)}</p>
+      </div>
+    </div>`).join('') : '<p class="note">No comments yet.</p>';
+}
+
+async function saveTask(){
+  const payload = {
+    title: $('#fld-title').value.trim(),
+    client: $('#fld-client').value.trim(),
+    project: $('#fld-project').value.trim(),
+    type: $('#fld-type').value,
+    assignee: $('#fld-assignee').value,
+    status: $('#fld-status').value,
+    priority: $('#fld-priority').value,
+    date_started: $('#fld-started').value,
+    due_date: $('#fld-due').value,
+    date_completed: $('#fld-completed').value,
+    notes: $('#fld-notes').value.trim()
+  };
+  if(!payload.title){ toast('Give the task a name'); return; }
+  if(payload.status==='done' && !payload.date_completed) payload.date_completed = todayISO();
+  if(payload.status!=='done') payload.date_completed = '';
+  if(payload.status!=='not_started' && !payload.date_started) payload.date_started = todayISO();
+
+  if(EDITING){
+    await Store.update(EDITING.id, payload);
+    toast('Task updated');
+  } else {
+    await Store.create(payload);
+    toast('Task added');
+  }
+  TASKS = await Store.list();
+  refreshFilterOptions();
+  closeModal();
+  render();
+}
+
+/* ============================================================
+   8. WIRING
+   ============================================================ */
+function fillSelect(el, items, placeholder){
+  el.innerHTML = (placeholder?`<option value="">${placeholder}</option>`:'') +
+    items.map(i=>`<option value="${esc(i.value)}">${esc(i.label)}</option>`).join('');
+}
+function refreshFilterOptions(){
+  const clients = [...new Set(TASKS.map(t=>t.client))].filter(Boolean).sort();
+  const projects = [...new Set(TASKS.map(t=>t.project))].filter(Boolean).sort();
+  const keep = (el,v)=>{ el.value = v; };
+  const cv=$('#fClient').value;
+  fillSelect($('#fClient'), clients.map(c=>({value:c,label:c})), 'All clients'); keep($('#fClient'),cv);
+  $('#clientList').innerHTML = clients.map(c=>`<option value="${esc(c)}">`).join('');
+  $('#projectList').innerHTML = projects.map(p=>`<option value="${esc(p)}">`).join('');
+}
+
+function wireBoard(){
+  let dragId = null;
+  $$('#board .card').forEach(el=>{
+    el.addEventListener('dragstart', e=>{ dragId = el.dataset.id; e.dataTransfer.effectAllowed='move'; });
+    el.addEventListener('click', ()=>openTask(el.dataset.id));
+  });
+  $$('#board .col').forEach(col=>{
+    col.addEventListener('dragover', e=>{ e.preventDefault(); col.classList.add('drop'); });
+    col.addEventListener('dragleave', ()=>col.classList.remove('drop'));
+    col.addEventListener('drop', async e=>{
+      e.preventDefault(); col.classList.remove('drop');
+      if(!dragId) return;
+      const status = col.dataset.status;
+      const patch = { status };
+      if(status==='done') patch.date_completed = todayISO();
+      else patch.date_completed = '';
+      const t = TASKS.find(x=>x.id===dragId);
+      if(status!=='not_started' && t && !t.date_started) patch.date_started = todayISO();
+      await Store.update(dragId, patch);
+      TASKS = await Store.list();
+      dragId = null;
+      render();
+      toast('Moved to ' + statusOf(status).label);
+    });
+  });
+}
+
+function switchView(v){
+  VIEW = v;
+  $$('.tabs button').forEach(b=>b.setAttribute('aria-selected', String(b.dataset.view===v)));
+  ['dashboard','board','table'].forEach(x=>$('#view-'+x).classList.toggle('hidden', x!==v));
+  render();
+}
+
+async function init(){
+  await Store.loadProfiles();
+  ME = USERS.find(u=>u.id === SESSION.user.id) || { id:SESSION.user.id, name:SESSION.user.email, role:'member' };
+
+  fillSelect($('#fld-type'), TYPES.map(t=>({value:t,label:t})));
+  fillSelect($('#fld-assignee'), USERS.map(u=>({value:u.name,label:u.name})));
+  fillSelect($('#fld-status'), STATUSES.map(s=>({value:s.key,label:s.label})));
+  fillSelect($('#fld-priority'), PRIORITIES.map(p=>({value:p.key,label:p.label})));
+  fillSelect($('#fAssignee'), USERS.map(u=>({value:u.name,label:u.name})), 'All assignees');
+  fillSelect($('#fStatus'), STATUSES.map(s=>({value:s.key,label:s.label})), 'All statuses');
+  fillSelect($('#fPriority'), PRIORITIES.map(p=>({value:p.key,label:p.label})), 'All priorities');
+  fillSelect($('#fType'), TYPES.map(t=>({value:t,label:t})), 'All task types');
+
+  $('#meAvatar').textContent = initials(ME.name);
+  $('#meName').textContent = ME.name + (ME.role==='admin' ? ' (admin)' : '');
+  $('#importBtn').classList.toggle('hidden', ME.role!=='admin');
+
+  TASKS = await Store.list();
+  refreshFilterOptions();
+  switchView('dashboard');
+
+  $('#booting').classList.add('hidden');
+  $('#login').classList.add('hidden');
+}
+
+/* refresh when the tab regains focus, and every 60 seconds, so the
+   two of you are not looking at stale data */
+let REFRESHING = false;
+async function refreshData(){
+  if(REFRESHING || !ME || document.hidden) return;
+  REFRESHING = true;
+  TASKS = await Store.list();
+  refreshFilterOptions();
+  render();
+  REFRESHING = false;
+}
+window.addEventListener('focus', refreshData);
+setInterval(refreshData, 60000);
+
+/* ============================================================
+   9. AUTH
+   ============================================================ */
+let SESSION = null;
+
+function showLogin(msg){
+  $('#booting').classList.add('hidden');
+  $('#login').classList.remove('hidden');
+  if(msg){ const el=$('#loginMsg'); el.className='loginmsg'; el.textContent=msg; }
+}
+
+$('#loginForm').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const email = $('#loginEmail').value.trim();
+  const password = $('#loginPass').value;
+  const btn = $('#loginBtn');
+  btn.disabled = true; btn.textContent = 'Signing in';
+  const { data, error } = await SB.auth.signInWithPassword({ email, password });
+  btn.disabled = false; btn.textContent = 'Sign in';
+  if(error){
+    const el = $('#loginMsg'); el.className='loginmsg';
+    el.textContent = 'That email and password did not match. Try again, or reset your password below.';
+    return;
+  }
+  SESSION = data.session;
+  $('#loginPass').value = '';
+  $('#booting').classList.remove('hidden');
+  await init();
+});
+
+$('#forgotBtn').addEventListener('click', async ()=>{
+  const email = $('#loginEmail').value.trim();
+  const el = $('#loginMsg');
+  if(!email){ el.className='loginmsg'; el.textContent='Type your email above first, then click here.'; return; }
+  const { error } = await SB.auth.resetPasswordForEmail(email, { redirectTo: window.location.href });
+  el.className = error ? 'loginmsg' : 'loginmsg ok';
+  el.textContent = error ? 'Could not send the reset email.' : 'Check your inbox for a reset link.';
+});
+
+$('#signOutBtn').addEventListener('click', async ()=>{
+  await SB.auth.signOut();
+  window.location.reload();
+});
+
+(async function boot(){
+  const { data } = await SB.auth.getSession();
+  if(data.session){
+    SESSION = data.session;
+    try { await init(); }
+    catch(err){ console.error(err); showLogin('Signed in, but the board could not load. Try refreshing.'); }
+  } else {
+    showLogin();
+  }
+})();
+
+// events
+$$('.tabs button').forEach(b=>b.addEventListener('click', ()=>switchView(b.dataset.view)));
+$('#newTaskBtn').addEventListener('click', ()=>openTask(null));
+$('#closeModal').addEventListener('click', closeModal);
+$('#scrim').addEventListener('click', closeModal);
+$('#saveTask').addEventListener('click', saveTask);
+$('#deleteTask').addEventListener('click', async ()=>{
+  if(!EDITING) return;
+  await Store.remove(EDITING.id);
+  TASKS = await Store.list();
+  closeModal(); render(); toast('Task deleted');
+});
+$('#addCommentBtn').addEventListener('click', async ()=>{
+  const body = $('#newComment').value.trim();
+  if(!body || !EDITING) { if(!EDITING) toast('Save the task first'); return; }
+  const ok = await Store.addComment(EDITING.id, body);
+  if(!ok) return;
+  TASKS = await Store.list();
+  EDITING = TASKS.find(t=>t.id===EDITING.id);
+  $('#newComment').value='';
+  renderComments(EDITING);
+  render();
+});
+$('#q').addEventListener('input', e=>{ F.q=e.target.value; render(); });
+['fClient','fAssignee','fStatus','fPriority','fType'].forEach(id=>{
+  $('#'+id).addEventListener('change', e=>{ F[id.slice(1).charAt(0).toLowerCase()+id.slice(2)] = e.target.value; render(); });
+});
+$('#tMine').addEventListener('click', e=>{ F.mine=!F.mine; e.currentTarget.dataset.on=String(F.mine); render(); });
+$('#tOverdue').addEventListener('click', e=>{ F.overdue=!F.overdue; e.currentTarget.dataset.on=String(F.overdue); render(); });
+$('#clearFilters').addEventListener('click', ()=>{
+  Object.assign(F,{q:'',client:'',assignee:'',status:'',priority:'',type:'',mine:false,overdue:false});
+  $('#q').value=''; ['fClient','fAssignee','fStatus','fPriority','fType'].forEach(id=>$('#'+id).value='');
+  $('#tMine').dataset.on='false'; $('#tOverdue').dataset.on='false';
+  render();
+});
+document.addEventListener('click', e=>{
+  const row = e.target.closest('.rowlink');
+  if(row && row.dataset.id) openTask(row.dataset.id);
+});
+$$('#tbl th').forEach(th=>th.addEventListener('click', ()=>{
+  const k = th.dataset.sort;
+  SORT = { key:k, dir: SORT.key===k ? -SORT.dir : 1 };
+  render();
+}));
+$('#exportBtn').addEventListener('click', ()=>{
+  const blob = new Blob([JSON.stringify(TASKS,null,2)],{type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'wecomeone-tasks-' + todayISO() + '.json';
+  a.click();
+});
+$('#importBtn').addEventListener('click', ()=>$('#fileInput').click());
+$('#fileInput').addEventListener('change', async e=>{
+  const f = e.target.files[0]; if(!f) return;
+  try{
+    const arr = JSON.parse(await f.text());
+    if(!Array.isArray(arr)) throw new Error('bad file');
+    const ok = await Store.bulkInsert(arr);
+    if(!ok) return;
+    TASKS = await Store.list();
+    refreshFilterOptions(); render(); toast('Imported ' + arr.length + ' tasks');
+  }catch(err){ toast('That file could not be read'); }
+  e.target.value='';
+});
+document.addEventListener('keydown', e=>{
+  if(e.key==='Escape') closeModal();
+  if(e.key==='n' && !/input|textarea|select/i.test(document.activeElement.tagName)) { e.preventDefault(); openTask(null); }
+});
+
+</script>
+</body>
+</html>

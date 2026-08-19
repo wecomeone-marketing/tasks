@@ -184,6 +184,8 @@
   tbody tr:hover{background:#f7f6f2}
   td.taskcell{white-space:normal;min-width:250px;font-weight:500}
   td.num{font-variant-numeric:tabular-nums}
+  td.linkcell{white-space:nowrap}
+  td.linkcell .linkchip{max-width:130px}
   tr.overdue td.due{color:#a52c2c;font-weight:600}
   .rowlink{cursor:pointer}
 
@@ -388,6 +390,7 @@
             <th data-sort="started">Started</th>
             <th data-sort="due">Due</th>
             <th data-sort="completed">Completed</th>
+            <th data-sort="links">Links</th>
             <th data-sort="comments">Notes</th>
           </tr>
         </thead>
@@ -836,6 +839,16 @@ function renderBoard(rows){
   wireBoard();
 }
 
+// up to two link chips in the table, the rest collapse into a counter
+function linkCell(t){
+  const ls = linksOf(t);
+  if(!ls.length) return '';
+  const chips = ls.slice(0,2).map(u=>
+    `<a class="linkchip" href="${esc(href(u))}" target="_blank" rel="noopener" title="${esc(u)}"><span>${esc(hostOf(u))}</span></a>`
+  ).join(' ');
+  return chips + (ls.length > 2 ? ` <span class="chip">+${ls.length-2}</span>` : '');
+}
+
 function renderTable(rows){
   const dir = SORT.dir;
   const val = (t,k)=>({
@@ -843,6 +856,7 @@ function renderTable(rows){
     priority:PRIORITIES.findIndex(p=>p.key===t.priority),
     status:STATUSES.findIndex(s=>s.key===t.status),
     started:t.date_started||'', due:t.due_date||'9999-12-31', completed:t.date_completed||'',
+    links:linksOf(t).length,
     comments:(t.comments||[]).length
   })[k];
   const sorted = rows.slice().sort((a,b)=>{
@@ -863,9 +877,10 @@ function renderTable(rows){
       <td class="num">${fmtDate(t.date_started)}</td>
       <td class="num due">${fmtDate(t.due_date)}</td>
       <td class="num">${fmtDate(t.date_completed)}</td>
+      <td class="linkcell">${linkCell(t)}</td>
       <td class="num">${(t.comments||[]).length||''}</td>
     </tr>`;
-  }).join('') : `<tr><td colspan="11"><div class="empty">No tasks match the current filters.</div></td></tr>`;
+  }).join('') : `<tr><td colspan="12"><div class="empty">No tasks match the current filters.</div></td></tr>`;
 }
 
 /* ============================================================
@@ -1262,6 +1277,7 @@ $('#clearFilters').addEventListener('click', ()=>{
   render();
 });
 document.addEventListener('click', e=>{
+  if(e.target.closest('a')) return;          // following a link is not a request to open the task
   const row = e.target.closest('.rowlink');
   if(row && row.dataset.id) openTask(row.dataset.id);
 });

@@ -267,7 +267,15 @@ function render(d){
   if(!token || !window.supabase){ hide('loading'); show('bad'); return; }
 
   try{
-    const SB = window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey);
+    // Deliberately signed out, always. This page shares an address with the
+    // board, so without this a signed in colleague would query as themselves
+    // and see a different page from the one the client sees.
+    const SB = window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey, {
+      auth: {
+        persistSession: false, autoRefreshToken: false, detectSessionInUrl: false,
+        storage: { getItem:()=>null, setItem:()=>{}, removeItem:()=>{} }
+      }
+    });
     const { data, error } = await SB.rpc('client_progress', { p_token: token });
     if(error || !data || !data.ok){ hide('loading'); show('bad'); return; }
     render(data);

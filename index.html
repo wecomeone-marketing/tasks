@@ -53,7 +53,7 @@
   header.top .brand strong{color:#fff;font-weight:600;font-size:14px;letter-spacing:0}
   header.top .brand span{color:#8f8e89}
   header.top .saved{color:#8f8e89}
-  header.top #meName{color:#e7e6e1}
+  header.top .brand span{color:#8f8e89}
   header.top .btn{
     background:transparent;border-color:rgba(255,255,255,.22);color:#e7e6e1;
   }
@@ -88,6 +88,25 @@
   .btn.primary:hover{background:#000}
   .btn.danger{color:var(--critical);border-color:rgba(208,59,59,.3)}
   .btn.small{padding:4px 9px;font-size:12px;border-radius:6px}
+  .usermenu{position:relative;margin-left:2px}
+  .usermenu .avatar{border:0;cursor:pointer;padding:0;box-shadow:0 0 0 0 rgba(68,255,207,.45);transition:box-shadow .15s}
+  .usermenu .avatar:hover,.usermenu[data-open="true"] .avatar{box-shadow:0 0 0 3px rgba(68,255,207,.35)}
+  .usermenu .menu{
+    position:absolute;right:0;top:calc(100% + 10px);min-width:242px;max-width:280px;background:var(--surface);
+    border:1px solid var(--grid);border-radius:10px;box-shadow:var(--shadow);padding:6px;display:none;z-index:60;
+  }
+  .usermenu[data-open="true"] .menu{display:block}
+  .usermenu .menu .who-head{padding:8px 10px 10px;border-bottom:1px solid var(--grid);margin-bottom:6px}
+  .usermenu .menu .who-head b{display:block;font-size:13.5px;color:var(--ink)}
+  .usermenu .menu .who-head span{display:block;font-size:12px;color:var(--ink-muted);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .usermenu .menu button{
+    display:block;width:100%;text-align:left;background:none;border:0;padding:8px 10px;border-radius:7px;
+    cursor:pointer;font-size:13.5px;color:var(--ink);
+  }
+  .usermenu .menu button:hover{background:#f2f1ec}
+  .usermenu .menu .sep{height:1px;background:var(--grid);margin:6px 0}
+  header.top .usermenu .menu .saved{display:block;padding:8px 10px 4px;font-size:11.5px;color:var(--ink-muted)}
   .who{display:flex;align-items:center;gap:8px}
   .avatar{
     width:26px;height:26px;border-radius:999px;background:var(--brand-mint);color:#0b3d31;
@@ -228,9 +247,7 @@
     header.top .brand strong{display:none}
     .tabs{order:3;width:100%}
     .tabs button{flex:1}
-    #exportBtn,#importBtn,.saved{display:none}
-    .who{margin-left:auto}
-    #meName{display:none}
+    .usermenu{margin-left:auto}
     .filters{gap:6px;padding:10px 0 12px}
     .filters input[type=search]{min-width:0;width:100%}
     .filters select,.filters .toggle,.filters .btn{font-size:13px;padding:6px 9px}
@@ -288,15 +305,21 @@
       <button role="tab" data-view="board" aria-selected="false">Board</button>
       <button role="tab" data-view="table" aria-selected="false">Table</button>
     </div>
-    <div class="who">
-      <div class="avatar" id="meAvatar"></div>
-      <span id="meName" style="font-size:13px"></span>
-      <button class="btn small" id="signOutBtn">Sign out</button>
-    </div>
     <button class="btn primary" id="newTaskBtn">New task</button>
-    <button class="btn small" id="exportBtn" title="Download a JSON backup">Export</button>
-    <button class="btn small" id="importBtn" title="Restore from a JSON backup">Import</button>
-    <span class="saved" id="savedAt">Loading</span>
+    <div class="usermenu" id="userMenu" data-open="false">
+      <button class="avatar" id="meAvatar" aria-haspopup="true" aria-expanded="false" title="Account"></button>
+      <div class="menu" role="menu">
+        <div class="who-head">
+          <b id="meName"></b>
+          <span id="meRole"></span>
+        </div>
+        <button id="exportBtn" role="menuitem">Export a backup</button>
+        <button id="importBtn" role="menuitem">Import a backup</button>
+        <div class="sep"></div>
+        <button id="signOutBtn" role="menuitem">Sign out</button>
+        <span class="saved" id="savedAt">Loading</span>
+      </div>
+    </div>
   </div>
 </header>
 
@@ -1021,7 +1044,8 @@ async function init(){
   fillSelect($('#fType'), TYPES.map(t=>({value:t,label:t})), 'All task types');
 
   $('#meAvatar').textContent = initials(ME.name);
-  $('#meName').textContent = ME.name + (ME.role==='admin' ? ' (admin)' : '');
+  $('#meName').textContent = ME.name;
+  $('#meRole').textContent = (ME.role==='admin' ? 'Admin' : 'Team member') + (ME.email ? ', ' + ME.email : '');
   $('#importBtn').classList.toggle('hidden', ME.role!=='admin');
 
   TASKS = await Store.list();
@@ -1084,6 +1108,21 @@ $('#forgotBtn').addEventListener('click', async ()=>{
   el.className = error ? 'loginmsg' : 'loginmsg ok';
   el.textContent = error ? 'Could not send the reset email.' : 'Check your inbox for a reset link.';
 });
+
+const userMenu = $('#userMenu');
+function setMenu(open){
+  userMenu.dataset.open = String(open);
+  $('#meAvatar').setAttribute('aria-expanded', String(open));
+}
+$('#meAvatar').addEventListener('click', e=>{
+  e.stopPropagation();
+  setMenu(userMenu.dataset.open !== 'true');
+});
+document.addEventListener('click', e=>{
+  if(!e.target.closest('#userMenu')) setMenu(false);
+});
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') setMenu(false); });
+$$('#userMenu .menu button').forEach(b=>b.addEventListener('click', ()=>setMenu(false)));
 
 $('#signOutBtn').addEventListener('click', async ()=>{
   await SB.auth.signOut();

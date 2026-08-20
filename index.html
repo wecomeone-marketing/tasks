@@ -679,16 +679,9 @@
 <div class="confirm" id="dupSheet">
   <div class="confirmbox dupbox" role="dialog" aria-modal="true" aria-labelledby="dupTitle">
     <h2 id="dupTitle">Duplicate</h2>
-    <p class="note" style="margin:0 0 16px;line-height:1.6">The copies arrive as Not started, with every step
-      unticked, belonging to whoever had the original. Comments stay behind with the month that is finished.</p>
-    <div class="field">
-      <label for="dupDates">Due dates</label>
-      <select id="dupDates">
-        <option value="shift">Move them forward one month</option>
-        <option value="keep">Leave them as they are</option>
-        <option value="clear">Clear them</option>
-      </select>
-    </div>
+    <p class="note" style="margin:0 0 16px;line-height:1.6">The copies arrive as Not started with no due date,
+      every step unticked, belonging to whoever had the original. Comments stay behind with the month that is
+      finished.</p>
     <div class="field">
       <label for="dupFind">Rename, optional</label>
       <div class="two">
@@ -913,15 +906,6 @@ const isArchived = t => t.status === 'done';
 const stepsOf   = t => Array.isArray(t.steps) ? t.steps : [];
 const stepsDone = t => stepsOf(t).filter(s=>s && s.done).length;
 const stepId    = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
-// The 31st of a month has no equal in the next one, so it lands on the last day instead
-function addMonth(iso){
-  if(!iso) return '';
-  const [y,m,d] = iso.split('-').map(Number);
-  const ny = m === 12 ? y + 1 : y;
-  const nm = m === 12 ? 1 : m + 1;
-  const lastDay = new Date(ny, nm, 0).getDate();
-  return `${ny}-${String(nm).padStart(2,'0')}-${String(Math.min(d, lastDay)).padStart(2,'0')}`;
-}
 const linksOf = t => (t.links||'').split(/[\n,]/).map(x=>x.trim()).filter(Boolean);
 const hostOf = u => { try { return new URL(u.startsWith('http') ? u : 'https://'+u).hostname.replace(/^www\./,''); } catch { return u; } };
 const href = u => u.startsWith('http') ? u : 'https://' + u;
@@ -1899,7 +1883,7 @@ $('#bulkClear').addEventListener('click', ()=>{ SELECTED.clear(); render(); });
 $('#bulkDupBtn').addEventListener('click', ()=>{
   if(!SELECTED.size) return;
   $('#dupTitle').textContent = 'Duplicate ' + SELECTED.size + ' task' + (SELECTED.size>1?'s':'');
-  $('#dupFind').value = ''; $('#dupRepl').value = ''; $('#dupDates').value = 'shift';
+  $('#dupFind').value = ''; $('#dupRepl').value = '';
   $('#dupSheet').dataset.open = 'true';
   setTimeout(()=>$('#dupFind').focus(), 30);
 });
@@ -1910,7 +1894,6 @@ $('#dupSheet').addEventListener('click', e=>{ if(e.target.id === 'dupSheet') clo
 $('#dupGo').addEventListener('click', async ()=>{
   const ids = [...SELECTED];
   if(!ids.length) return closeDup();
-  const mode = $('#dupDates').value;
   const find = $('#dupFind').value;
   const repl = $('#dupRepl').value;
   const swap = v => (find && v) ? String(v).split(find).join(repl) : v;
@@ -1922,7 +1905,7 @@ $('#dupGo').addEventListener('click', async ()=>{
     priority: t.priority,
     status: 'not_started',
     date_started: '', date_completed: '',
-    due_date: mode === 'clear' ? '' : (mode === 'shift' ? addMonth(t.due_date) : t.due_date),
+    due_date: '',                                   // next month's deadline is rarely last month's
     notes: t.notes, links: t.links,
     waiting_on: '', waiting_since: '',
     steps: stepsOf(t).map(x=>({ id:stepId(), text:x.text, done:false }))

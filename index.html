@@ -152,6 +152,26 @@
   .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--ink-2);margin-top:12px}
   .legend span{display:inline-flex;align-items:center;gap:6px}
 
+  /* Progress by client, one row per client, state in words */
+  .crow{
+    display:grid;grid-template-columns:minmax(90px,1fr) minmax(0,auto) 96px 42px;
+    gap:12px;align-items:center;padding:8px 0;
+  }
+  .crow + .crow{border-top:1px solid var(--grid)}
+  .crow .name{font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .crow .state{
+    display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-muted);
+    white-space:nowrap;overflow:hidden;justify-self:end;min-width:0;
+  }
+  .crow .state b{font-weight:600;color:var(--ink-2)}
+  .meter{height:8px;background:#efeee9;border-radius:4px;overflow:hidden}
+  .meter i{display:block;height:100%;border-radius:4px;min-width:0}
+  .crow .pct{font-size:12.5px;font-weight:600;text-align:right;font-variant-numeric:tabular-nums}
+  @media(max-width:1080px){
+    .crow{grid-template-columns:minmax(80px,1fr) 76px 42px;row-gap:2px}
+    .crow .state{grid-column:1 / -1;justify-self:start;order:9}
+  }
+
   /* Board */
   .board{display:grid;grid-template-columns:repeat(6,minmax(190px,1fr));gap:10px;overflow-x:auto;padding-bottom:8px}
   .col{background:var(--surface);border:1px solid var(--grid);border-radius:var(--radius);display:flex;flex-direction:column;min-height:180px}
@@ -917,6 +937,43 @@ function kpiTile(label, value, sub, color){
   </div>`;
 }
 
+// How far along a client's work is. Status is the only signal the board has, so
+// each status carries a weight. It estimates position in the pipeline, not effort.
+const PROGRESS_WEIGHT = {
+  not_started: 0, blocked: .25, in_progress: .5, waiting: .5, review: .85, done: 1
+};
+
+// The one thing a client's row should lead with, worst first. rank drives the sort,
+// so the panel reads top down as a list of what needs you.
+function clientHeadline(list){
+  const n = k => list.filter(t=>t.status===k).length;
+  const c = k => (STATUSES.find(s=>s.key===k) || {}).color;
+  const total = list.length;
+  const overdue = list.filter(isOverdue);
+  const stale = list.filter(isStale);
+
+  // "1 of 1" is noise, so the count only appears when there is more than one task
+  const some = k => total > 1 ? `${n(k)} of ${total}` : '';
+
+  if(n('blocked'))
+    return { rank:0, color:c('blocked'), label:'Blocked', detail: some('blocked') };
+  if(overdue.length)
+    return { rank:1, color:c('blocked'), label:'Overdue', detail: total > 1 ? `${overdue.length} past due` : '' };
+  if(stale.length)
+    return { rank:2, color:c('waiting'), label:'Waiting', detail:`${Math.max(...stale.map(waitingDays))} days, worth a chase` };
+  if(n('waiting')){
+    const who = (list.find(t=>t.status==='waiting') || {}).waiting_on;
+    return { rank:3, color:c('waiting'), label:'Waiting', detail: who ? `on ${who}` : some('waiting') };
+  }
+  if(n('review'))
+    return { rank:4, color:c('review'), label:'In review', detail:`${n('review')} to approve` };
+  if(n('in_progress'))
+    return { rank:5, color:c('in_progress'), label:'In progress', detail: some('in_progress') };
+  if(n('done') === total)
+    return { rank:7, color:c('done'), label:'Completed', detail: total > 1 ? `all ${total}` : '' };
+  return { rank:6, color:c('not_started'), label:'Not started', detail: some('not_started') };
+}
+
 function renderDashboard(rows){
   const open = rows.filter(t=>t.status!=='done');
   const counts = {};
@@ -934,22 +991,37 @@ function renderDashboard(rows){
     kpiTile('In review', counts.review, 'Waiting on approval', '#fab219') +
     kpiTile('Completed this month', doneThisMonth, 'Across all clients', '#0ca30c');
 
-  // Progress by client: stacked status bar, ordered, plus done ratio
-  const clients = [...new Set(rows.map(t=>t.client))].sort();
-  $('#byClient').innerHTML = clients.length ? clients.map(cl=>{
-    const list = rows.filter(t=>t.client===cl);
-    const total = list.length;
-    const segs = STATUSES.map(s=>{
-      const n = list.filter(t=>t.status===s.key).length;
-      return n ? `<i style="background:${s.color};width:${(n/total*100).toFixed(2)}%" title="${s.label}: ${n}"></i>` : '';
-    }).join('');
-    const done = list.filter(t=>t.status==='done').length;
-    return `<div class="rowbar">
-      <span class="name" title="${esc(cl)}">${esc(cl)}</span>
-      <span class="track">${segs}</span>
-      <span class="num">${done}/${total} completed</span>
-    </div>`;
-  }).join('') + `<div class="legend">${STATUSES.map(s=>`<span><span class="dot" style="background:${s.color}"></span>${s.label}</span>`).join('')}</div>`
+  // Progress by client. One row, one client, one plain English state.
+  // The old version stacked six colours per bar and every row said 0/1 completed,
+  // which told you nothing at a glance.
+  const groups = new Map();
+  rows.forEach(t=>{
+    const k = (t.client||'').trim() || 'No client';
+    if(!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(t);
+  });
+  const entries = [...groups.entries()].map(([name, list])=>{
+    const h = clientHeadline(list);
+    const pct = Math.round(100 * list.reduce((a,t)=>a + (PROGRESS_WEIGHT[t.status] ?? 0), 0) / list.length);
+    const spread = STATUSES
+      .map(s=>{ const n = list.filter(t=>t.status===s.key).length; return n ? `${n} ${s.label.toLowerCase()}` : ''; })
+      .filter(Boolean).join(', ');
+    return { name, h, pct, total:list.length, spread };
+  }).sort((a,b)=> a.h.rank - b.h.rank || a.name.localeCompare(b.name));
+
+  $('#byClient').innerHTML = entries.length ? entries.map(e=>`
+    <div class="crow" title="${esc(e.name)}: ${e.total} task${e.total>1?'s':''}, ${esc(e.spread)}">
+      <span class="name">${esc(e.name)}</span>
+      <span class="state">
+        <span class="dot" style="background:${e.h.color}"></span>
+        <b>${e.h.label}</b>${e.h.detail ? ' · ' + esc(e.h.detail) : ''}
+      </span>
+      <span class="meter"><i style="width:${e.pct}%;background:${e.h.color}"></i></span>
+      <span class="pct">${e.pct}%</span>
+    </div>`).join('') +
+    `<p class="note" style="margin-top:12px">Whatever needs you sits at the top.
+      The percentage comes from status, not hours: not started nothing, blocked a quarter,
+      in progress or waiting half, in review most of the way, completed all of it.</p>`
    : '<div class="empty">No tasks match the current filters.</div>';
 
   // Workload by assignee: open tasks only, single hue, with overdue count called out

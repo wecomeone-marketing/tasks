@@ -370,6 +370,25 @@
   .addstep .btn{flex:none}
   .stepcount{font-variant-numeric:tabular-nums}
 
+  /* Editing in the table */
+  td[data-f]{cursor:text}
+  td[data-f]:hover{background:#f4f8fe;box-shadow:inset 0 0 0 1px var(--blue-100)}
+  /* the Edit column stays put when the table is scrolled sideways */
+  td.act, th.act{
+    width:1%;white-space:nowrap;text-align:right;
+    position:sticky;right:0;background:var(--surface);
+    box-shadow:-1px 0 0 var(--grid);
+  }
+  th.act{z-index:3;cursor:default}
+  tbody tr:hover td.act{background:#f7f6f2}
+  tr.picked td.act{background:#f2f7fe}
+  .emptycell{color:#c9c8c1}
+  .cellinput{
+    width:100%;min-width:96px;font:inherit;color:inherit;padding:4px 6px;
+    border:1px solid var(--blue-250);border-radius:6px;background:#fff;outline:none;
+  }
+  select.cellinput{min-width:120px}
+
   /* Bulk selection */
   td.pick, th.pick{width:1%;padding-right:0}
   td.pick input, th.pick input{width:16px;height:16px;accent-color:var(--ink);cursor:pointer;vertical-align:middle}
@@ -501,6 +520,7 @@
             <th data-sort="completed">Completed</th>
             <th data-sort="links">Links</th>
             <th data-sort="comments">Notes</th>
+            <th class="act"></th>
           </tr>
         </thead>
         <tbody id="tbody"></tbody>
@@ -879,7 +899,9 @@ const Store = {
 let TASKS = [];
 let ME = null;
 let VIEW = 'dashboard';
-let SORT = { key:'due', dir:1 };
+// Newest first, so a task you just added or copied is at the top rather than
+// buried wherever its due date happens to put it. Click any header to re-sort.
+let SORT = { key:'updated', dir:-1 };
 let EDITING = null;
 let TASK_STEPS = [];        // working copy of the open task's steps
 let SELECTED = new Set();  // task ids ticked in the table
@@ -1177,6 +1199,8 @@ function renderTable(rows){
   // so the selection only ever holds what is in front of you.
   const visible = new Set(rows.map(t=>t.id));
   SELECTED.forEach(id=>{ if(!visible.has(id)) SELECTED.delete(id); });
+  // an empty cell still needs something to click on
+  const blank = '<span class="emptycell">&mdash;</span>';
   const dir = SORT.dir;
   const val = (t,k)=>({
     client:t.client, project:t.project, title:t.title, type:t.type, assignee:t.assignee,
@@ -1184,7 +1208,8 @@ function renderTable(rows){
     status:STATUSES.findIndex(s=>s.key===t.status),
     started:t.date_started||'', due:t.due_date||'9999-12-31', completed:t.date_completed||'',
     links:linksOf(t).length,
-    comments:(t.comments||[]).length
+    comments:(t.comments||[]).length,
+    updated:t.updated_at||''
   })[k];
   const sorted = rows.slice().sort((a,b)=>{
     const x=val(a,SORT.key), y=val(b,SORT.key);
@@ -1193,29 +1218,30 @@ function renderTable(rows){
   });
   $('#tbody').innerHTML = sorted.length ? sorted.map(t=>{
     const s = statusOf(t.status), p = prioOf(t.priority);
-    return `<tr class="rowlink ${isOverdue(t)?'overdue':''} ${SELECTED.has(t.id)?'picked':''}" data-id="${t.id}">
+    return `<tr class="${isOverdue(t)?'overdue':''} ${SELECTED.has(t.id)?'picked':''}" data-id="${t.id}">
       <td class="pick"><input type="checkbox" data-pick="${t.id}"${SELECTED.has(t.id)?' checked':''} aria-label="Select ${esc(t.title)}"></td>
-      <td>${esc(t.client)}</td>
-      <td>${esc(t.project)}</td>
-      <td class="taskcell">${esc(t.title)}${stepsOf(t).length
+      <td data-f="client">${esc(t.client) || blank}</td>
+      <td data-f="project">${esc(t.project) || blank}</td>
+      <td class="taskcell" data-f="title">${esc(t.title)}${stepsOf(t).length
         ? `<div class="stepcount" style="font-size:11.5px;color:var(--ink-muted);font-weight:400;margin-top:3px">${stepsDone(t)} of ${stepsOf(t).length} steps</div>`
         : ''}</td>
-      <td>${esc(t.type)}</td>
-      <td>${t.assignee
+      <td data-f="type">${esc(t.type) || blank}</td>
+      <td data-f="assignee">${t.assignee
         ? `<span class="avatar mini-av" style="display:inline-grid;vertical-align:middle;margin-right:6px">${initials(t.assignee)}</span>${esc(t.assignee)}`
         : '<span style="color:var(--ink-muted)">Unassigned</span>'}</td>
-      <td><span class="chip"><span class="dot" style="background:${p.color}"></span>${p.label}</span></td>
-      <td><span class="chip"><span class="dot" style="background:${s.color}"></span>${s.label}</span>${
+      <td data-f="priority"><span class="chip"><span class="dot" style="background:${p.color}"></span>${p.label}</span></td>
+      <td data-f="status"><span class="chip"><span class="dot" style="background:${s.color}"></span>${s.label}</span>${
         t.status==='waiting' && t.waiting_on
           ? `<div style="font-size:11.5px;color:${isStale(t)?'#a52c2c':'var(--ink-muted)'};margin-top:3px">${esc(t.waiting_on)}${waitingDays(t)!==null?', '+waitingDays(t)+'d':''}</div>`
           : ''}</td>
-      <td class="num">${fmtDate(t.date_started)}</td>
-      <td class="num due">${fmtDate(t.due_date)}</td>
-      <td class="num">${fmtDate(t.date_completed)}</td>
+      <td class="num" data-f="date_started">${fmtDate(t.date_started) || blank}</td>
+      <td class="num due" data-f="due_date">${fmtDate(t.due_date) || blank}</td>
+      <td class="num" data-f="date_completed">${fmtDate(t.date_completed) || blank}</td>
       <td class="linkcell">${linkCell(t)}</td>
       <td class="num">${(t.comments||[]).length||''}</td>
+      <td class="act"><button class="btn small" data-edit="${t.id}">Edit</button></td>
     </tr>`;
-  }).join('') : `<tr><td colspan="13"><div class="empty">No tasks match the current filters.</div></td></tr>`;
+  }).join('') : `<tr><td colspan="14"><div class="empty">No tasks match the current filters.</div></td></tr>`;
   syncBulk();
 }
 
@@ -1857,13 +1883,20 @@ function syncBulk(){
 
 $('#tbody').addEventListener('click', e=>{
   const box = e.target.closest('input[data-pick]');
-  if(!box) return;
-  e.stopPropagation();                       // ticking a row is not opening it
-  const id = box.dataset.pick;
-  if(box.checked) SELECTED.add(id); else SELECTED.delete(id);
-  const tr = box.closest('tr');
-  if(tr) tr.classList.toggle('picked', box.checked);
-  syncBulk();
+  if(box){
+    e.stopPropagation();                     // ticking a row is not opening it
+    const id = box.dataset.pick;
+    if(box.checked) SELECTED.add(id); else SELECTED.delete(id);
+    const tr = box.closest('tr');
+    if(tr) tr.classList.toggle('picked', box.checked);
+    syncBulk();
+    return;
+  }
+  const edit = e.target.closest('button[data-edit]');
+  if(edit){ openTask(edit.dataset.edit); return; }
+  if(e.target.closest('a')) return;           // following a link is not editing
+  const cell = e.target.closest('td[data-f]');
+  if(cell) startEdit(cell);
 });
 
 $('#pickAll').addEventListener('click', e=>{
@@ -1947,6 +1980,104 @@ async function duplicate(find, repl){
   if(showingCompleted()){ F.archive = false; F.status = ''; $('#fStatus').value = ''; }
   render();
   toast(rows.length + ' copied, ready to start');
+}
+
+/* ============================================================
+   EDITING IN THE TABLE
+   Click the cell you want to change. The heavy things, the brief,
+   the links and the comment thread, still live behind Edit.
+   ============================================================ */
+
+const EDITABLE = {
+  client:         { kind:'text',   list:'clientList' },
+  project:        { kind:'text',   list:'projectList' },
+  title:          { kind:'text' },
+  type:           { kind:'select', options: ()=>TYPES.map(t=>({ value:t, label:t })) },
+  assignee:       { kind:'select', options: ()=>[{ value:'', label:'Unassigned' }]
+                                     .concat(USERS.map(u=>({ value:u.name, label:u.name }))) },
+  priority:       { kind:'select', options: ()=>PRIORITIES.map(x=>({ value:x.key, label:x.label })) },
+  status:         { kind:'select', options: ()=>STATUSES.map(x=>({ value:x.key, label:x.label })) },
+  date_started:   { kind:'date' },
+  due_date:       { kind:'date' },
+  date_completed: { kind:'date' }
+};
+
+async function saveCell(id, field, value){
+  const t = TASKS.find(x=>x.id===id);
+  if(!t) return;
+
+  // status goes the long way round so it gets the steps question and the date stamping
+  if(field === 'status') return setStatus(id, value);
+
+  const patch = { [field]: value };
+
+  // typing a completed date means the task is finished, the same as it does in the panel
+  if(field === 'date_completed'){
+    if(value){
+      const open = stepsOf(t).filter(x=>!x.done).length;
+      if(open){
+        const choice = await askSteps(open, stepsOf(t).length);
+        if(choice !== 'tick'){ render(); return; }
+        patch.steps = stepsOf(t).map(x=>({ ...x, done:true }));
+      }
+      patch.status = 'done';
+    } else if(t.status === 'done'){
+      patch.status = 'in_progress';
+    }
+  }
+
+  await Store.update(id, patch);
+  TASKS = await Store.list();
+  refreshFilterOptions();
+  render();
+}
+
+function startEdit(td){
+  const field = td.dataset.f;
+  const tr = td.closest('tr');
+  if(!field || td.dataset.editing === 'true' || !tr) return;
+  const spec = EDITABLE[field];
+  const t = TASKS.find(x=>x.id === tr.dataset.id);
+  if(!spec || !t) return;
+
+  const was = td.innerHTML;
+  const current = t[field] || '';
+  td.dataset.editing = 'true';
+
+  let el;
+  if(spec.kind === 'select'){
+    el = document.createElement('select');
+    el.innerHTML = spec.options()
+      .map(o=>`<option value="${esc(o.value)}"${o.value === current ? ' selected' : ''}>${esc(o.label)}</option>`)
+      .join('');
+  } else {
+    el = document.createElement('input');
+    el.type = spec.kind === 'date' ? 'date' : 'text';
+    el.value = current;
+    if(spec.list) el.setAttribute('list', spec.list);
+  }
+  el.className = 'cellinput';
+  td.innerHTML = '';
+  td.appendChild(el);
+  el.focus();
+  if(spec.kind === 'text') el.select();
+  try { el.showPicker && el.showPicker(); } catch(_){}
+
+  let settled = false;
+  const finish = async keep => {
+    if(settled) return;
+    settled = true;
+    const v = el.value;
+    td.dataset.editing = 'false';
+    if(!keep || v === current){ td.innerHTML = was; return; }
+    await saveCell(t.id, field, v);
+  };
+  el.addEventListener('change', ()=>finish(true));
+  el.addEventListener('blur',   ()=>finish(true));
+  el.addEventListener('keydown', e=>{
+    if(e.key === 'Enter'){  e.preventDefault(); finish(true);  }
+    if(e.key === 'Escape'){ e.preventDefault(); finish(false); }
+  });
 }
 
 /* ---------- Delete a batch ---------- */
@@ -2170,6 +2301,7 @@ document.addEventListener('click', e=>{
 });
 $$('#tbl th').forEach(th=>th.addEventListener('click', ()=>{
   const k = th.dataset.sort;
+  if(!k) return;                     // the tick box and Edit columns do not sort
   SORT = { key:k, dir: SORT.key===k ? -SORT.dir : 1 };
   render();
 }));

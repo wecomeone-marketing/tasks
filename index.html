@@ -422,7 +422,7 @@
     <select id="fType"><option value="">All task types</option></select>
     <button class="toggle" id="tMine" data-on="false">My tasks</button>
     <button class="toggle" id="tOverdue" data-on="false">Overdue only</button>
-    <button class="toggle" id="tArchive" data-on="false" title="Tasks completed more than 30 days ago">Show archive</button>
+    <button class="toggle" id="tArchive" data-on="false" title="Show finished work instead of live work">Completed</button>
     <button class="btn small" id="clearFilters">Clear</button>
     <span class="spacer"></span>
     <span class="count" id="resultCount"></span>
@@ -712,7 +712,7 @@ const TYPES = ['Branding','Content','Graphic Design','Paid ads','SEO','Social Me
 // task fills the steps in for you. They are ordinary steps once added, so edit or
 // delete them freely. Add a type here and it gains the same behaviour.
 const TYPE_STEPS = {
-  'Social Media': ['Build the grid', 'Schedule the posts']
+  'Social Media': ['Build the grid', 'Schedule Posts']
 };
 
 let USERS = [];   // loaded from the profiles table after sign in
@@ -840,7 +840,9 @@ const isOverdue = t => t.status!=='done' && t.due_date && daysTo(t.due_date) < 0
 // a task parked with someone outside the team, and for how long
 const waitingDays = t => (t.status==='waiting' && t.waiting_since) ? Math.abs(daysTo(t.waiting_since)) : null;
 const isStale = t => { const d = waitingDays(t); return d !== null && d >= 7; };
-const isArchived = t => t.status==='done' && t.date_completed && daysTo(t.date_completed) < -30;
+// Finished work leaves the working views the moment it is finished. The Completed
+// toggle swaps the Board and Table over to showing that finished work and nothing else.
+const isArchived = t => t.status === 'done';
 // Steps, the phases inside one task
 const stepsOf   = t => Array.isArray(t.steps) ? t.steps : [];
 const stepsDone = t => stepsOf(t).filter(s=>s && s.done).length;
@@ -864,10 +866,13 @@ function toast(msg){
 /* ============================================================
    5. FILTERING
    ============================================================ */
-function filtered(){
+// Everything except the completed/live divide. The Dashboard uses this directly, so
+// its counters and percentages keep seeing finished work even while the Board hides it.
+// Without that, "Completed this month" would read zero forever and a client's progress
+// would fall as the work got delivered.
+function matchesFilters(t){
   const q = F.q.trim().toLowerCase();
-  return TASKS.filter(t=>{
-    if(!F.archive && isArchived(t)) return false;
+  return (t=>{
     if(F.client && t.client!==F.client) return false;
     if(F.assignee && t.assignee!==F.assignee) return false;
     if(F.status && t.status!==F.status) return false;
@@ -882,16 +887,25 @@ function filtered(){
       if(!hay.includes(q)) return false;
     }
     return true;
-  });
+  })(t);
 }
+const forDashboard = () => TASKS.filter(matchesFilters);
+// Picking Completed in the status filter means the same thing as pressing the toggle,
+// otherwise that choice would quietly return nothing.
+const showingCompleted = () => F.archive || F.status === 'done';
+const filtered = () => TASKS.filter(t => matchesFilters(t) && (showingCompleted() ? isArchived(t) : !isArchived(t)));
 
 /* ============================================================
    6. RENDER
    ============================================================ */
 function render(){
   const rows = filtered();
-  $('#resultCount').textContent = rows.length + ' of ' + TASKS.length + ' tasks';
-  if(VIEW==='dashboard') renderDashboard(rows);
+  const openTotal = TASKS.filter(t=>!isArchived(t)).length;
+  $('#resultCount').textContent = showingCompleted()
+    ? rows.length + ' completed'
+    : rows.length + ' of ' + openTotal + ' open';
+  $('#tArchive').dataset.on = String(showingCompleted());
+  if(VIEW==='dashboard') renderDashboard(forDashboard());
   if(VIEW==='board') renderBoard(rows);
   if(VIEW==='table') renderTable(rows);
 }
@@ -1067,12 +1081,21 @@ function cardHTML(t){
 }
 
 function renderBoard(rows){
-  $('#board').innerHTML = STATUSES.map(s=>{
-    const list = rows.filter(t=>t.status===s.key)
-      .sort((a,b)=> (a.due_date||'9999').localeCompare(b.due_date||'9999'));
+  // With the Completed toggle off, the last column is an empty place to drop something
+  // rather than a pile that only grows. Turn the toggle on and the board becomes the
+  // finished work, newest first, and nothing else.
+  const cols = showingCompleted() ? STATUSES.filter(s=>s.key==='done') : STATUSES;
+  $('#board').style.gridTemplateColumns = `repeat(${cols.length},minmax(190px,1fr))`;
+  $('#board').innerHTML = cols.map(s=>{
+    const list = rows.filter(t=>t.status===s.key).sort(s.key==='done'
+      ? (a,b)=> (b.date_completed||'').localeCompare(a.date_completed||'')
+      : (a,b)=> (a.due_date||'9999').localeCompare(b.due_date||'9999'));
+    const blank = (s.key==='done' && !showingCompleted())
+      ? 'Drop a card here to finish it.<br>Finished work lives behind <b>Completed</b> in the filter bar.'
+      : 'Nothing here';
     return `<div class="col${list.length?'':' col-empty'}" data-status="${s.key}">
       <header><span class="dot" style="background:${s.color}"></span>${s.label}<span class="n">${list.length}</span></header>
-      <div class="stack">${list.map(cardHTML).join('') || '<div class="empty" style="padding:18px 8px;font-size:12px">Nothing here</div>'}</div>
+      <div class="stack">${list.map(cardHTML).join('') || `<div class="empty" style="padding:18px 8px;font-size:12px;line-height:1.6">${blank}</div>`}</div>
     </div>`;
   }).join('');
   wireBoard();
@@ -1194,7 +1217,9 @@ function renderSteps(){
   const type = $('#fld-type').value;
   const note = $('#stepNote');
   if(total){
-    note.textContent = `${done} of ${total} done. Drag to reorder. The task is not finished until every step is ticked.`;
+    note.textContent = done === total
+      ? `All ${total} done, so the task is marked Completed. Untick one to reopen it.`
+      : `${done} of ${total} done. Drag to reorder. Ticking the last one completes the task.`;
   } else if(TYPE_STEPS[type]){
     note.innerHTML = `<button type="button" class="linky" id="prefillSteps" style="margin-top:0">Add the usual ${esc(type)} steps</button>`;
   } else {
@@ -1206,7 +1231,30 @@ function addStep(text){
   const t = (text||'').trim();
   if(!t) return;
   TASK_STEPS.push({ id:stepId(), text:t, done:false });
+  syncStatusToSteps();
   renderSteps();
+}
+
+// The steps are the task. Tick the last one and the task is finished, so the panel says so
+// straight away rather than waiting for the save, and you can still overrule it before you
+// save. Untick one and it goes back, because a task marked Completed with a step still open
+// is the exact thing the warning exists to prevent.
+// Only ever triggered by something you did to the steps, never by merely opening a task.
+function syncStatusToSteps(){
+  if(!TASK_STEPS.length) return;
+  const allDone = TASK_STEPS.every(x=>x.done);
+  const status = $('#fld-status').value;
+  if(allDone && status !== 'done'){
+    $('#fld-status').value = 'done';
+    if(!$('#fld-completed').value) $('#fld-completed').value = todayISO();
+    toggleWaiting('done', null);
+    toast('Every step ticked, marked as Completed');
+  } else if(!allDone && status === 'done'){
+    $('#fld-status').value = 'in_progress';
+    $('#fld-completed').value = '';
+    toggleWaiting('in_progress', null);
+    toast('A step is open again, back to In progress');
+  }
 }
 
 function prefillSteps(){
@@ -1368,6 +1416,21 @@ function wireBoard(){
 async function setStatus(id, status){
   const t = TASKS.find(x=>x.id===id);
   const patch = { status };
+
+  // Dragging into Completed is the fast path, so it gets the same question the panel asks.
+  if(status === 'done' && t){
+    const open = stepsOf(t).filter(x=>!x.done).length;
+    if(open){
+      const choice = await askSteps(open, stepsOf(t).length);
+      if(choice !== 'tick'){
+        render();                                   // snap the card back where it was
+        if(choice === 'open') toast(open + ' step' + (open>1?'s':'') + ' still to do');
+        return;
+      }
+      patch.steps = stepsOf(t).map(x=>({ ...x, done:true }));
+    }
+  }
+
   patch.date_completed = status==='done' ? todayISO() : '';
   if(status!=='not_started' && t && !t.date_started) patch.date_started = todayISO();
   await Store.update(id, patch);
@@ -1583,7 +1646,7 @@ const STEPS = [
     title:'Or the full panel',
     body:`<p>For real detail. Brief, due date, links to the drive folder, and the comment thread.</p>
           <p>Comment here rather than on WhatsApp. In six weeks the reasoning sits with the task.</p>
-          <p><b>Steps</b> is for a task with phases, a month of social that gets built and then scheduled. Tick them off as you go, one task instead of two.</p>` },
+          <p><b>Steps</b> is for a task with phases, a month of social that gets built and then scheduled. Tick them off as you go, one task instead of two. Tick the last one and the task completes itself.</p>` },
 
   { el:'#tbl', view:'table', place:'below',
     title:'Everything at once',
@@ -1716,6 +1779,7 @@ $('#stepList').addEventListener('click', e=>{
   const i = Number(b.dataset.i);
   if(b.dataset.act === 'tick') TASK_STEPS[i].done = !TASK_STEPS[i].done;
   if(b.dataset.act === 'rm')   TASK_STEPS.splice(i, 1);
+  syncStatusToSteps();
   renderSteps();
 });
 

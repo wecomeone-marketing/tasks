@@ -370,6 +370,33 @@
   .addstep .btn{flex:none}
   .stepcount{font-variant-numeric:tabular-nums}
 
+  /* Bulk selection */
+  td.pick, th.pick{width:1%;padding-right:0}
+  td.pick input, th.pick input{width:16px;height:16px;accent-color:var(--ink);cursor:pointer;vertical-align:middle}
+  tr.picked td{background:#f2f7fe}
+  .bulkbar{
+    position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(24px);
+    display:flex;align-items:center;gap:8px;z-index:95;
+    background:var(--ink);color:#fff;padding:9px 10px 9px 16px;border-radius:12px;
+    box-shadow:0 8px 30px rgba(11,11,11,.28);opacity:0;pointer-events:none;transition:.18s;
+  }
+  .bulkbar[data-open="true"]{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}
+  .bulkbar b{font-size:13px;font-weight:600;white-space:nowrap;margin-right:4px}
+  .bulkbar select,.bulkbar input[type="date"]{
+    background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22);color:#fff;
+    border-radius:8px;padding:6px 9px;font-size:13px;
+  }
+  .bulkbar select option{color:var(--ink)}
+  .bulkbar .btn{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.22);color:#fff}
+  .bulkbar .btn:hover{background:rgba(255,255,255,.22)}
+  .bulkbar .btn.danger{color:#ffb4b4;border-color:rgba(255,180,180,.35)}
+  .bulkbar .btn.danger:hover{background:rgba(255,120,120,.2)}
+  .bulkbar .divider{width:1px;height:20px;background:rgba(255,255,255,.2);margin:0 2px}
+  .bulkbar .duelbl{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:rgba(255,255,255,.75)}
+  body[data-bulk="true"] .toast{bottom:86px}
+  .dupbox{text-align:left;width:min(470px,100%)}
+  .dupbox h2{text-align:left}
+
   .toast{
     position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);
     background:var(--ink);color:#fff;padding:9px 16px;border-radius:999px;font-size:13px;
@@ -467,6 +494,7 @@
       <table id="tbl">
         <thead>
           <tr>
+            <th class="pick"><input type="checkbox" id="pickAll" aria-label="Select everything shown"></th>
             <th data-sort="client">Client</th>
             <th data-sort="project">Project</th>
             <th data-sort="title">Task</th>
@@ -646,6 +674,45 @@
   </div>
 </div>
 
+<div class="bulkbar" id="bulkBar" data-open="false" role="region" aria-label="Actions for the selected tasks">
+  <b id="bulkCount"></b>
+  <select id="bulkAssign" aria-label="Assign the selected tasks to"></select>
+  <label class="duelbl" for="bulkDue">Due<input type="date" id="bulkDue" title="Give them all the same due date"></label>
+  <button class="btn small" id="bulkDupBtn">Duplicate</button>
+  <button class="btn small danger hidden" id="bulkDelBtn">Delete</button>
+  <span class="divider"></span>
+  <button class="btn small" id="bulkClear">Clear</button>
+</div>
+
+<div class="confirm" id="dupSheet">
+  <div class="confirmbox dupbox" role="dialog" aria-modal="true" aria-labelledby="dupTitle">
+    <h2 id="dupTitle">Duplicate</h2>
+    <p class="note" style="margin:0 0 16px;line-height:1.6">The copies arrive as Not started and unassigned, with
+      every step unticked. Comments stay behind with the month that is finished.</p>
+    <div class="field">
+      <label for="dupDates">Due dates</label>
+      <select id="dupDates">
+        <option value="shift">Move them forward one month</option>
+        <option value="keep">Leave them as they are</option>
+        <option value="clear">Clear them</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="dupFind">Rename, optional</label>
+      <div class="two">
+        <input id="dupFind" placeholder="September">
+        <input id="dupRepl" placeholder="October">
+      </div>
+      <p class="note">Swaps the first word for the second in the client, project and task name of the copies.
+        Case matters. Leave it empty to copy the wording as it is.</p>
+    </div>
+    <div class="confirmrow" style="justify-content:flex-end">
+      <button class="btn" id="dupCancel">Cancel</button>
+      <button class="btn primary" id="dupGo">Duplicate</button>
+    </div>
+  </div>
+</div>
+
 <div class="confirm" id="confirmSteps">
   <div class="confirmbox" role="alertdialog" aria-modal="true" aria-labelledby="stepsTitle">
     <h2 id="stepsTitle">This task still has steps open</h2>
@@ -808,6 +875,18 @@ const Store = {
     stampSaved();
     return true;
   },
+  async updateMany(ids, patch){
+    const { error } = await SB.from('tasks').update(toRow(patch)).in('id', ids);
+    if(error){ toast('Could not save'); console.error(error); return false; }
+    stampSaved();
+    return true;
+  },
+  async removeMany(ids){
+    const { error } = await SB.from('tasks').delete().in('id', ids);
+    if(error){ toast(ME.role==='admin' ? 'Could not delete' : 'Only an admin can delete'); console.error(error); return false; }
+    stampSaved();
+    return true;
+  },
   async bulkInsert(rows){
     const { error } = await SB.from('tasks').insert(rows.map(toRow));
     if(error){ toast('Import failed'); console.error(error); return false; }
@@ -824,6 +903,7 @@ let VIEW = 'dashboard';
 let SORT = { key:'due', dir:1 };
 let EDITING = null;
 let TASK_STEPS = [];        // working copy of the open task's steps
+let SELECTED = new Set();  // task ids ticked in the table
 const F = { q:'', client:'', assignee:'', status:'', priority:'', type:'', mine:false, overdue:false, archive:false };
 
 const $  = s => document.querySelector(s);
@@ -847,6 +927,15 @@ const isArchived = t => t.status === 'done';
 const stepsOf   = t => Array.isArray(t.steps) ? t.steps : [];
 const stepsDone = t => stepsOf(t).filter(s=>s && s.done).length;
 const stepId    = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+// The 31st of a month has no equal in the next one, so it lands on the last day instead
+function addMonth(iso){
+  if(!iso) return '';
+  const [y,m,d] = iso.split('-').map(Number);
+  const ny = m === 12 ? y + 1 : y;
+  const nm = m === 12 ? 1 : m + 1;
+  const lastDay = new Date(ny, nm, 0).getDate();
+  return `${ny}-${String(nm).padStart(2,'0')}-${String(Math.min(d, lastDay)).padStart(2,'0')}`;
+}
 const linksOf = t => (t.links||'').split(/[\n,]/).map(x=>x.trim()).filter(Boolean);
 const hostOf = u => { try { return new URL(u.startsWith('http') ? u : 'https://'+u).hostname.replace(/^www\./,''); } catch { return u; } };
 const href = u => u.startsWith('http') ? u : 'https://' + u;
@@ -908,6 +997,7 @@ function render(){
   if(VIEW==='dashboard') renderDashboard(forDashboard());
   if(VIEW==='board') renderBoard(rows);
   if(VIEW==='table') renderTable(rows);
+  syncBulk();
 }
 
 function kpiTile(label, value, sub, color){
@@ -1018,13 +1108,14 @@ function renderDashboard(rows){
 
   // Workload by assignee: open tasks only, single hue, with overdue count called out
   const people = [...new Set(rows.map(t=>t.assignee))].sort();
+  const personLabel = p => p || 'Unassigned';
   const maxOpen = Math.max(1, ...people.map(p=>rows.filter(t=>t.assignee===p && t.status!=='done').length));
   $('#byAssignee').innerHTML = people.length ? people.map(p=>{
     const mine = rows.filter(t=>t.assignee===p);
     const openN = mine.filter(t=>t.status!=='done').length;
     const od = mine.filter(isOverdue).length;
     return `<div class="rowbar">
-      <span class="name">${esc(p)}</span>
+      <span class="name">${esc(personLabel(p))}</span>
       <span class="track"><i style="background:#1a1a1a;width:${(openN/maxOpen*100).toFixed(2)}%"></i></span>
       <span class="num">${openN} open${od?` <span style="color:#a52c2c">${od} overdue</span>`:''}</span>
     </div>`;
@@ -1112,6 +1203,10 @@ function linkCell(t){
 }
 
 function renderTable(rows){
+  // A tick on a task you have since filtered away would act on something you cannot see,
+  // so the selection only ever holds what is in front of you.
+  const visible = new Set(rows.map(t=>t.id));
+  SELECTED.forEach(id=>{ if(!visible.has(id)) SELECTED.delete(id); });
   const dir = SORT.dir;
   const val = (t,k)=>({
     client:t.client, project:t.project, title:t.title, type:t.type, assignee:t.assignee,
@@ -1128,14 +1223,17 @@ function renderTable(rows){
   });
   $('#tbody').innerHTML = sorted.length ? sorted.map(t=>{
     const s = statusOf(t.status), p = prioOf(t.priority);
-    return `<tr class="rowlink ${isOverdue(t)?'overdue':''}" data-id="${t.id}">
+    return `<tr class="rowlink ${isOverdue(t)?'overdue':''} ${SELECTED.has(t.id)?'picked':''}" data-id="${t.id}">
+      <td class="pick"><input type="checkbox" data-pick="${t.id}"${SELECTED.has(t.id)?' checked':''} aria-label="Select ${esc(t.title)}"></td>
       <td>${esc(t.client)}</td>
       <td>${esc(t.project)}</td>
       <td class="taskcell">${esc(t.title)}${stepsOf(t).length
         ? `<div class="stepcount" style="font-size:11.5px;color:var(--ink-muted);font-weight:400;margin-top:3px">${stepsDone(t)} of ${stepsOf(t).length} steps</div>`
         : ''}</td>
       <td>${esc(t.type)}</td>
-      <td><span class="avatar mini-av" style="display:inline-grid;vertical-align:middle;margin-right:6px">${initials(t.assignee)}</span>${esc(t.assignee)}</td>
+      <td>${t.assignee
+        ? `<span class="avatar mini-av" style="display:inline-grid;vertical-align:middle;margin-right:6px">${initials(t.assignee)}</span>${esc(t.assignee)}`
+        : '<span style="color:var(--ink-muted)">Unassigned</span>'}</td>
       <td><span class="chip"><span class="dot" style="background:${p.color}"></span>${p.label}</span></td>
       <td><span class="chip"><span class="dot" style="background:${s.color}"></span>${s.label}</span>${
         t.status==='waiting' && t.waiting_on
@@ -1147,7 +1245,8 @@ function renderTable(rows){
       <td class="linkcell">${linkCell(t)}</td>
       <td class="num">${(t.comments||[]).length||''}</td>
     </tr>`;
-  }).join('') : `<tr><td colspan="12"><div class="empty">No tasks match the current filters.</div></td></tr>`;
+  }).join('') : `<tr><td colspan="13"><div class="empty">No tasks match the current filters.</div></td></tr>`;
+  syncBulk();
 }
 
 /* ============================================================
@@ -1452,7 +1551,8 @@ async function init(){
   ME = USERS.find(u=>u.id === SESSION.user.id) || { id:SESSION.user.id, name:SESSION.user.email, role:'member' };
 
   fillSelect($('#fld-type'), TYPES.map(t=>({value:t,label:t})));
-  fillSelect($('#fld-assignee'), USERS.map(u=>({value:u.name,label:u.name})));
+  fillSelect($('#fld-assignee'), USERS.map(u=>({value:u.name,label:u.name})), 'Unassigned');
+  fillSelect($('#bulkAssign'), USERS.map(u=>({value:u.name,label:u.name})), 'Assign to…');
   fillSelect($('#fld-status'), STATUSES.map(s=>({value:s.key,label:s.label})));
   fillSelect($('#fld-priority'), PRIORITIES.map(p=>({value:p.key,label:p.label})));
   fillSelect($('#qaAssignee'), USERS.map(u=>({value:u.name,label:u.name})));
@@ -1765,6 +1865,133 @@ $('#tourSkip').addEventListener('click', endTour);
 $('#guideBtn').addEventListener('click', ()=>{ setMenu(false); startTour(); });
 
 /* ============================================================
+   BULK ACTIONS
+   Tick a few rows in the table and act on all of them at once.
+   Built for the end of the month: filter to a client, press
+   Completed, tick the lot, duplicate them into next month.
+   ============================================================ */
+
+function syncBulk(){
+  const n = SELECTED.size;
+  document.body.dataset.bulk = String(n > 0);
+  $('#bulkBar').dataset.open = String(n > 0 && VIEW === 'table');
+  $('#bulkCount').textContent = n + ' selected';
+  $('#bulkDelBtn').classList.toggle('hidden', !ME || ME.role !== 'admin');
+  const boxes = $$('#tbody input[data-pick]');
+  const picked = boxes.filter(b=>SELECTED.has(b.dataset.pick)).length;
+  const all = $('#pickAll');
+  if(all){
+    all.checked = boxes.length > 0 && picked === boxes.length;
+    all.indeterminate = picked > 0 && picked < boxes.length;
+  }
+}
+
+$('#tbody').addEventListener('click', e=>{
+  const box = e.target.closest('input[data-pick]');
+  if(!box) return;
+  e.stopPropagation();                       // ticking a row is not opening it
+  const id = box.dataset.pick;
+  if(box.checked) SELECTED.add(id); else SELECTED.delete(id);
+  const tr = box.closest('tr');
+  if(tr) tr.classList.toggle('picked', box.checked);
+  syncBulk();
+});
+
+$('#pickAll').addEventListener('click', e=>{
+  const on = e.target.checked;
+  $$('#tbody input[data-pick]').forEach(b=>{
+    b.checked = on;
+    if(on) SELECTED.add(b.dataset.pick); else SELECTED.delete(b.dataset.pick);
+    const tr = b.closest('tr'); if(tr) tr.classList.toggle('picked', on);
+  });
+  syncBulk();
+});
+
+$('#bulkClear').addEventListener('click', ()=>{ SELECTED.clear(); render(); });
+
+// Assigning a batch does send the people involved one email each. That is the board
+// doing its job, but it is worth knowing before you tick thirty rows.
+$('#bulkAssign').addEventListener('change', async e=>{
+  const name = e.target.value;
+  e.target.value = '';
+  if(!name || !SELECTED.size) return;
+  const ids = [...SELECTED];
+  if(await Store.updateMany(ids, { assignee: name })){
+    TASKS = await Store.list();
+    SELECTED.clear();
+    render();
+    toast(ids.length + ' task' + (ids.length>1?'s':'') + ' assigned to ' + name);
+  }
+});
+
+$('#bulkDue').addEventListener('change', async e=>{
+  const d = e.target.value;
+  e.target.value = '';
+  if(!d || !SELECTED.size) return;
+  const ids = [...SELECTED];
+  if(await Store.updateMany(ids, { due_date: d })){
+    TASKS = await Store.list();
+    render();
+    toast(ids.length + ' due ' + fmtDate(d));
+  }
+});
+
+/* ---------- Duplicate ---------- */
+
+$('#bulkDupBtn').addEventListener('click', ()=>{
+  if(!SELECTED.size) return;
+  $('#dupTitle').textContent = 'Duplicate ' + SELECTED.size + ' task' + (SELECTED.size>1?'s':'');
+  $('#dupFind').value = ''; $('#dupRepl').value = ''; $('#dupDates').value = 'shift';
+  $('#dupSheet').dataset.open = 'true';
+  setTimeout(()=>$('#dupFind').focus(), 30);
+});
+function closeDup(){ $('#dupSheet').dataset.open = 'false'; }
+$('#dupCancel').addEventListener('click', closeDup);
+$('#dupSheet').addEventListener('click', e=>{ if(e.target.id === 'dupSheet') closeDup(); });
+
+$('#dupGo').addEventListener('click', async ()=>{
+  const ids = [...SELECTED];
+  if(!ids.length) return closeDup();
+  const mode = $('#dupDates').value;
+  const find = $('#dupFind').value;
+  const repl = $('#dupRepl').value;
+  const swap = v => (find && v) ? String(v).split(find).join(repl) : v;
+
+  const rows = TASKS.filter(t=>ids.includes(t.id)).map(t=>({
+    client: swap(t.client), project: swap(t.project), title: swap(t.title),
+    type: t.type,
+    assignee: '',                                   // handed out afterwards, on purpose
+    priority: t.priority,
+    status: 'not_started',
+    date_started: '', date_completed: '',
+    due_date: mode === 'clear' ? '' : (mode === 'shift' ? addMonth(t.due_date) : t.due_date),
+    notes: t.notes, links: t.links,
+    waiting_on: '', waiting_since: '',
+    steps: stepsOf(t).map(x=>({ id:stepId(), text:x.text, done:false }))
+  }));
+
+  closeDup();
+  if(!await Store.bulkInsert(rows)) return;
+  TASKS = await Store.list();
+  SELECTED.clear();
+  refreshFilterOptions();
+  // the copies are live work, so show them rather than leaving him looking at the archive
+  if(showingCompleted()){ F.archive = false; F.status = ''; $('#fStatus').value = ''; }
+  render();
+  toast(rows.length + ' copied, unassigned and not started');
+});
+
+/* ---------- Delete a batch ---------- */
+
+$('#bulkDelBtn').addEventListener('click', ()=>{
+  if(!SELECTED.size) return;
+  PENDING_BULK = [...SELECTED];
+  $('#confirmWhat').textContent = PENDING_BULK.length + ' task' + (PENDING_BULK.length>1?'s':'');
+  $('#confirmDelete').dataset.open = 'true';
+  setTimeout(()=>$('#confirmNo').focus(), 30);
+});
+
+/* ============================================================
    STEPS WIRING
    ============================================================ */
 $('#addStepBtn').addEventListener('click', ()=>{ addStep($('#newStep').value); $('#newStep').value=''; $('#newStep').focus(); });
@@ -1847,6 +2074,7 @@ $('#scrim').addEventListener('click', closeModal);
 $('#saveTask').addEventListener('click', saveTask);
 /* deleting is the one thing on this board that cannot be undone, so it asks first */
 let PENDING_DELETE = null;
+let PENDING_BULK = null;
 
 function askDelete(task){
   PENDING_DELETE = task;
@@ -1857,6 +2085,7 @@ function askDelete(task){
 }
 function closeConfirm(){
   PENDING_DELETE = null;
+  PENDING_BULK = null;
   $('#confirmDelete').dataset.open = 'false';
 }
 
@@ -1864,6 +2093,18 @@ $('#deleteTask').addEventListener('click', ()=>{ if(EDITING) askDelete(EDITING);
 $('#confirmNo').addEventListener('click', closeConfirm);
 $('#confirmDelete').addEventListener('click', e=>{ if(e.target.id === 'confirmDelete') closeConfirm(); });
 $('#confirmYes').addEventListener('click', async ()=>{
+  if(PENDING_BULK){
+    const ids = PENDING_BULK;
+    closeConfirm();
+    if(await Store.removeMany(ids)){
+      TASKS = await Store.list();
+      SELECTED.clear();
+      refreshFilterOptions();
+      render();
+      toast(ids.length + ' task' + (ids.length>1?'s':'') + ' deleted');
+    }
+    return;
+  }
   if(!PENDING_DELETE) return;
   const id = PENDING_DELETE.id;
   closeConfirm();
@@ -1985,6 +2226,7 @@ $('#fileInput').addEventListener('change', async e=>{
   e.target.value='';
 });
 document.addEventListener('keydown', e=>{
+  if(e.key==='Escape' && $('#dupSheet').dataset.open === 'true'){ closeDup(); return; }
   if(e.key==='Escape' && $('#confirmSteps').dataset.open === 'true'){ closeSteps('cancel'); return; }
   if(e.key==='Escape' && $('#confirmDelete').dataset.open === 'true'){ closeConfirm(); return; }
   if(e.key==='Escape') closeModal();

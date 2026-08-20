@@ -1880,22 +1880,49 @@ $('#bulkClear').addEventListener('click', ()=>{ SELECTED.clear(); render(); });
 
 /* ---------- Duplicate ---------- */
 
+// Month names, longest first so March is never mistaken for Mar.
+const MONTH_FULL  = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+// Looks for a month in what is about to be copied. Only if it finds one is there any
+// point asking about a rename, and if it does find one it can fill the answer in too.
+function monthInSelection(tasks){
+  const hay = tasks.map(t=>[t.client, t.project, t.title].join(' ')).join(' ');
+  const forms = MONTH_FULL.map((m,i)=>({ word:m, i, short:false }))
+    .concat([{ word:'Sept', i:8, short:true }])
+    .concat(MONTH_SHORT.map((m,i)=>({ word:m, i, short:true })));
+  for(const f of forms){
+    const hit = hay.match(new RegExp('\\b' + f.word + '\\b', 'i'));
+    if(!hit) continue;
+    const found = hit[0];
+    let next = f.short ? MONTH_SHORT[(f.i + 1) % 12] : MONTH_FULL[(f.i + 1) % 12];
+    if(found === found.toUpperCase()) next = next.toUpperCase();
+    else if(found === found.toLowerCase()) next = next.toLowerCase();
+    return { found, next };
+  }
+  return null;
+}
+
 $('#bulkDupBtn').addEventListener('click', ()=>{
   if(!SELECTED.size) return;
+  const picked = TASKS.filter(t=>SELECTED.has(t.id));
+  const month = monthInSelection(picked);
+  // nothing with a month in it, so nothing to ask about
+  if(!month) return duplicate('', '');
   $('#dupTitle').textContent = 'Duplicate ' + SELECTED.size + ' task' + (SELECTED.size>1?'s':'');
-  $('#dupFind').value = ''; $('#dupRepl').value = '';
+  $('#dupFind').value = month.found;
+  $('#dupRepl').value = month.next;
   $('#dupSheet').dataset.open = 'true';
-  setTimeout(()=>$('#dupFind').focus(), 30);
+  setTimeout(()=>{ const r = $('#dupRepl'); r.focus(); r.select(); }, 30);
 });
 function closeDup(){ $('#dupSheet').dataset.open = 'false'; }
 $('#dupCancel').addEventListener('click', closeDup);
 $('#dupSheet').addEventListener('click', e=>{ if(e.target.id === 'dupSheet') closeDup(); });
+$('#dupGo').addEventListener('click', ()=>duplicate($('#dupFind').value, $('#dupRepl').value));
 
-$('#dupGo').addEventListener('click', async ()=>{
+async function duplicate(find, repl){
   const ids = [...SELECTED];
   if(!ids.length) return closeDup();
-  const find = $('#dupFind').value;
-  const repl = $('#dupRepl').value;
   const swap = v => (find && v) ? String(v).split(find).join(repl) : v;
 
   const rows = TASKS.filter(t=>ids.includes(t.id)).map(t=>({
@@ -1920,7 +1947,7 @@ $('#dupGo').addEventListener('click', async ()=>{
   if(showingCompleted()){ F.archive = false; F.status = ''; $('#fStatus').value = ''; }
   render();
   toast(rows.length + ' copied, ready to start');
-});
+}
 
 /* ---------- Delete a batch ---------- */
 

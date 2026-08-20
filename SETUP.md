@@ -339,3 +339,34 @@ Completed work drops off the page sixty days after its completion date.
 
 Switching a link off, or replacing the token, kills the old address immediately. Both are one
 click in the board, under the avatar menu, Client links.
+
+## Steps inside a task
+
+Some jobs have phases. A month of social is built as a grid first and scheduled after,
+and before this the board had no way to say half. `steps-setup.sql` adds a `steps` column
+to `tasks`, a jsonb array of `{id, text, done}`, with a check constraint so a bad write
+cannot put something other than a list in there.
+
+Steps sit on the task rather than in a table of their own. That keeps them atomic with the
+task, needs no second query and no second security policy. The cost is that two people
+editing the steps of the same task at the same moment would have the last save win, which
+is not worth a table for a team of two.
+
+Three things in the page hang off it:
+
+- The task panel has a Steps list, add with enter, tick to complete, drag to reorder.
+- Cards and table rows show a count, and only when a task actually has steps.
+- Saving a task as Completed while a step is unticked opens a dialog rather than going
+  through quietly. That is the case this was built for.
+
+`TYPE_STEPS` near the top of the script holds the default lists per task type. Social Media
+is the only one filled in. Choosing that type on a new task drops the steps in, and they are
+ordinary steps from that moment, editable and deletable. Add a type to that object and it
+gains the same behaviour, no other change needed.
+
+Steps also feed the Progress by client panel. Where a task has them, the count of ticked
+steps is used instead of the status estimate, whichever reads further along. Nothing reaches
+a hundred until the task is marked Completed.
+
+The client progress page never sees steps. The `client_progress` function names its columns
+by hand and steps is not among them.

@@ -382,17 +382,11 @@
   }
   .bulkbar[data-open="true"]{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}
   .bulkbar b{font-size:13px;font-weight:600;white-space:nowrap;margin-right:4px}
-  .bulkbar select,.bulkbar input[type="date"]{
-    background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22);color:#fff;
-    border-radius:8px;padding:6px 9px;font-size:13px;
-  }
-  .bulkbar select option{color:var(--ink)}
   .bulkbar .btn{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.22);color:#fff}
   .bulkbar .btn:hover{background:rgba(255,255,255,.22)}
   .bulkbar .btn.danger{color:#ffb4b4;border-color:rgba(255,180,180,.35)}
   .bulkbar .btn.danger:hover{background:rgba(255,120,120,.2)}
   .bulkbar .divider{width:1px;height:20px;background:rgba(255,255,255,.2);margin:0 2px}
-  .bulkbar .duelbl{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:rgba(255,255,255,.75)}
   body[data-bulk="true"] .toast{bottom:86px}
   .dupbox{text-align:left;width:min(470px,100%)}
   .dupbox h2{text-align:left}
@@ -676,8 +670,6 @@
 
 <div class="bulkbar" id="bulkBar" data-open="false" role="region" aria-label="Actions for the selected tasks">
   <b id="bulkCount"></b>
-  <select id="bulkAssign" aria-label="Assign the selected tasks to"></select>
-  <label class="duelbl" for="bulkDue">Due<input type="date" id="bulkDue" title="Give them all the same due date"></label>
   <button class="btn small" id="bulkDupBtn">Duplicate</button>
   <button class="btn small danger hidden" id="bulkDelBtn">Delete</button>
   <span class="divider"></span>
@@ -687,8 +679,8 @@
 <div class="confirm" id="dupSheet">
   <div class="confirmbox dupbox" role="dialog" aria-modal="true" aria-labelledby="dupTitle">
     <h2 id="dupTitle">Duplicate</h2>
-    <p class="note" style="margin:0 0 16px;line-height:1.6">The copies arrive as Not started and unassigned, with
-      every step unticked. Comments stay behind with the month that is finished.</p>
+    <p class="note" style="margin:0 0 16px;line-height:1.6">The copies arrive as Not started, with every step
+      unticked, belonging to whoever had the original. Comments stay behind with the month that is finished.</p>
     <div class="field">
       <label for="dupDates">Due dates</label>
       <select id="dupDates">
@@ -872,12 +864,6 @@ const Store = {
   async addComment(taskId, body){
     const { error } = await SB.from('comments').insert({ task_id:taskId, body, author:ME.id });
     if(error){ toast('Could not post the comment'); console.error(error); return false; }
-    stampSaved();
-    return true;
-  },
-  async updateMany(ids, patch){
-    const { error } = await SB.from('tasks').update(toRow(patch)).in('id', ids);
-    if(error){ toast('Could not save'); console.error(error); return false; }
     stampSaved();
     return true;
   },
@@ -1552,7 +1538,6 @@ async function init(){
 
   fillSelect($('#fld-type'), TYPES.map(t=>({value:t,label:t})));
   fillSelect($('#fld-assignee'), USERS.map(u=>({value:u.name,label:u.name})), 'Unassigned');
-  fillSelect($('#bulkAssign'), USERS.map(u=>({value:u.name,label:u.name})), 'Assign to…');
   fillSelect($('#fld-status'), STATUSES.map(s=>({value:s.key,label:s.label})));
   fillSelect($('#fld-priority'), PRIORITIES.map(p=>({value:p.key,label:p.label})));
   fillSelect($('#qaAssignee'), USERS.map(u=>({value:u.name,label:u.name})));
@@ -1909,33 +1894,6 @@ $('#pickAll').addEventListener('click', e=>{
 
 $('#bulkClear').addEventListener('click', ()=>{ SELECTED.clear(); render(); });
 
-// Assigning a batch does send the people involved one email each. That is the board
-// doing its job, but it is worth knowing before you tick thirty rows.
-$('#bulkAssign').addEventListener('change', async e=>{
-  const name = e.target.value;
-  e.target.value = '';
-  if(!name || !SELECTED.size) return;
-  const ids = [...SELECTED];
-  if(await Store.updateMany(ids, { assignee: name })){
-    TASKS = await Store.list();
-    SELECTED.clear();
-    render();
-    toast(ids.length + ' task' + (ids.length>1?'s':'') + ' assigned to ' + name);
-  }
-});
-
-$('#bulkDue').addEventListener('change', async e=>{
-  const d = e.target.value;
-  e.target.value = '';
-  if(!d || !SELECTED.size) return;
-  const ids = [...SELECTED];
-  if(await Store.updateMany(ids, { due_date: d })){
-    TASKS = await Store.list();
-    render();
-    toast(ids.length + ' due ' + fmtDate(d));
-  }
-});
-
 /* ---------- Duplicate ---------- */
 
 $('#bulkDupBtn').addEventListener('click', ()=>{
@@ -1960,7 +1918,7 @@ $('#dupGo').addEventListener('click', async ()=>{
   const rows = TASKS.filter(t=>ids.includes(t.id)).map(t=>({
     client: swap(t.client), project: swap(t.project), title: swap(t.title),
     type: t.type,
-    assignee: '',                                   // handed out afterwards, on purpose
+    assignee: t.assignee,                           // next month's work belongs to the same person
     priority: t.priority,
     status: 'not_started',
     date_started: '', date_completed: '',
@@ -1978,7 +1936,7 @@ $('#dupGo').addEventListener('click', async ()=>{
   // the copies are live work, so show them rather than leaving him looking at the archive
   if(showingCompleted()){ F.archive = false; F.status = ''; $('#fStatus').value = ''; }
   render();
-  toast(rows.length + ' copied, unassigned and not started');
+  toast(rows.length + ' copied, ready to start');
 });
 
 /* ---------- Delete a batch ---------- */

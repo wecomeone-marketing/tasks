@@ -229,6 +229,18 @@
   }
   .field textarea{min-height:70px;resize:vertical}
   .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .three{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+  /* task type, a task can be more than one thing at once */
+  .fieldlabel{display:block;font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;
+    color:var(--ink-muted);margin-bottom:5px;font-weight:600}
+  .typepick{display:flex;flex-wrap:wrap;gap:6px}
+  .typepick label{display:inline-flex;align-items:center;gap:6px;margin:0;padding:6px 10px;
+    border:1px solid var(--line);border-radius:999px;background:#fff;cursor:pointer;
+    font-size:12.5px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--ink-2);
+    user-select:none;white-space:nowrap}
+  .typepick label:hover{border-color:var(--ink-muted)}
+  .typepick label.on{background:var(--blue-100);border-color:var(--blue-250);color:var(--ink)}
+  .typepick input{margin:0;accent-color:var(--blue)}
   .comments{margin-top:6px;border-top:1px solid var(--grid);padding-top:14px}
   .comment{display:flex;gap:9px;padding:9px 0}
   .comment + .comment{border-top:1px solid var(--grid)}
@@ -289,6 +301,7 @@
     .quickadd .btn{flex:1}
     .modal{width:100%;border-left:0}
     .two{grid-template-columns:1fr}
+    .three{grid-template-columns:1fr}
     table{font-size:12.5px}
     td.taskcell{min-width:180px}
   }
@@ -489,10 +502,6 @@
     <button class="btn small" id="closeModal">Close</button>
   </header>
   <div class="content">
-    <div class="field">
-      <label for="fld-title">Task</label>
-      <input id="fld-title" placeholder="What needs doing">
-    </div>
     <div class="two">
       <div class="field">
         <label for="fld-client">Client</label>
@@ -505,17 +514,19 @@
         <datalist id="projectList"></datalist>
       </div>
     </div>
-    <div class="two">
-      <div class="field">
-        <label for="fld-type">Task type</label>
-        <select id="fld-type"></select>
-      </div>
+    <div class="field">
+      <label for="fld-title">Task</label>
+      <input id="fld-title" placeholder="What needs doing">
+    </div>
+    <div class="field">
+      <span class="fieldlabel">Task type</span>
+      <div class="typepick" id="typePick" role="group" aria-label="Task type"></div>
+    </div>
+    <div class="three">
       <div class="field">
         <label for="fld-assignee">Assignee</label>
         <select id="fld-assignee"></select>
       </div>
-    </div>
-    <div class="two">
       <div class="field">
         <label for="fld-status">Status</label>
         <select id="fld-status"></select>
@@ -709,6 +720,11 @@ const PRIORITIES = [
 ];
 const TYPES = ['Branding','Content','Graphic Design','Paid ads','SEO','Social Media','Strategy','Video','Web Design'];
 
+// A task can be more than one type. They live in the same text column, comma separated,
+// so nothing in the database had to change and every task written before this still reads back.
+const typeList = v => String(v||'').split(',').map(s=>s.trim()).filter(Boolean);
+const typeText = a => a.join(', ');
+
 
 let USERS = [];   // loaded from the profiles table after sign in
 
@@ -874,7 +890,7 @@ function matchesFilters(t){
     if(F.assignee && t.assignee!==F.assignee) return false;
     if(F.status && t.status!==F.status) return false;
     if(F.priority && t.priority!==F.priority) return false;
-    if(F.type && t.type!==F.type) return false;
+    if(F.type && !typeList(t.type).includes(F.type)) return false;
     if(F.mine && t.assignee!==ME.name) return false;
     if(F.overdue && !isOverdue(t)) return false;
     if(q){
@@ -1143,16 +1159,33 @@ function renderTable(rows){
 /* ============================================================
    7. MODAL
    ============================================================ */
+function buildTypePick(){
+  $('#typePick').innerHTML = TYPES.map(t =>
+    `<label><input type="checkbox" value="${esc(t)}">${esc(t)}</label>`).join('');
+  $('#typePick').addEventListener('change', e=>{
+    const box = e.target.closest('input');
+    if(box) box.closest('label').classList.toggle('on', box.checked);
+  });
+}
+function setTypes(v){
+  const on = new Set(typeList(v));
+  $$('#typePick input').forEach(box=>{
+    box.checked = on.has(box.value);
+    box.closest('label').classList.toggle('on', box.checked);
+  });
+}
+const getTypes = () => typeText($$('#typePick input').filter(b=>b.checked).map(b=>b.value));
+
 function openTask(id){
   EDITING = id ? TASKS.find(t=>t.id===id) : null;
-  const t = EDITING || { client:'', project:'', title:'', type:TYPES[0], assignee:ME.name,
+  const t = EDITING || { client:'', project:'', title:'', type:'', assignee:ME.name,
     priority:'medium', status:'not_started', date_started:'', due_date:'', date_completed:'', notes:'', links:'',
     waiting_on:'', waiting_since:'', comments:[] };
   $('#modalTitle').textContent = EDITING ? 'Edit task' : 'New task';
   $('#fld-title').value = t.title;
   $('#fld-client').value = t.client;
   $('#fld-project').value = t.project;
-  $('#fld-type').value = t.type;
+  setTypes(t.type);
   $('#fld-assignee').value = t.assignee;
   $('#fld-status').value = t.status;
   $('#fld-priority').value = t.priority;
@@ -1172,7 +1205,7 @@ function openTask(id){
   $('#roleNote').textContent = ME.role==='admin' ? 'Signed in as admin' : 'Members can edit and comment, admins can delete';
   $('#scrim').dataset.open='true';
   $('#modal').dataset.open='true';
-  setTimeout(()=>$('#fld-title').focus(), 30);
+  setTimeout(()=>$(EDITING ? '#fld-title' : '#fld-client').focus(), 30);
 }
 function closeModal(){
   $('#scrim').dataset.open='false';
@@ -1212,7 +1245,7 @@ async function saveTask(){
     title: $('#fld-title').value.trim(),
     client: $('#fld-client').value.trim(),
     project: $('#fld-project').value.trim(),
-    type: $('#fld-type').value,
+    type: getTypes(),
     assignee: $('#fld-assignee').value,
     status: $('#fld-status').value,
     priority: $('#fld-priority').value,
@@ -1324,7 +1357,7 @@ async function init(){
   await Store.loadProfiles();
   ME = USERS.find(u=>u.id === SESSION.user.id) || { id:SESSION.user.id, name:SESSION.user.email, role:'member' };
 
-  fillSelect($('#fld-type'), TYPES.map(t=>({value:t,label:t})));
+  buildTypePick();
   fillSelect($('#fld-assignee'), USERS.map(u=>({value:u.name,label:u.name})), 'Unassigned');
   fillSelect($('#fld-status'), STATUSES.map(s=>({value:s.key,label:s.label})));
   fillSelect($('#fld-priority'), PRIORITIES.map(p=>({value:p.key,label:p.label})));

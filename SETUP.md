@@ -126,7 +126,7 @@ create index comments_task_idx  on comments(task_id);
 --
 -- The rules in one sentence: nothing is readable without signing in, everyone can
 -- create and edit, only admins can delete, and a task assigned to an admin is
--- visible only to that admin.
+-- visible only to that admin unless it is Under review.
 
 alter table profiles enable row level security;
 alter table tasks    enable row level security;
@@ -144,11 +144,15 @@ create policy "admins manage profiles" on profiles
   );
 
 -- Tasks. The admin clause is what makes an admin's own tasks private.
+-- The review clause is the one exception: work handed over for checking stays
+-- visible to the person who handed it over, otherwise it vanishes from their
+-- board at the moment they most want to keep an eye on it.
 drop policy if exists "team reads tasks" on tasks;
 create policy "team reads tasks" on tasks
   for select to authenticated using (
     assignee is null
     or assignee = auth.uid()
+    or status = 'review'
     or not exists (
       select 1 from profiles p where p.id = tasks.assignee and p.role = 'admin'
     )
@@ -163,6 +167,7 @@ create policy "team updates tasks" on tasks
   for update to authenticated using (
     assignee is null
     or assignee = auth.uid()
+    or status = 'review'
     or not exists (
       select 1 from profiles p where p.id = tasks.assignee and p.role = 'admin'
     )
@@ -309,9 +314,19 @@ select cron.schedule(
 
 ## Rules worth knowing before you change anything
 
-An admin's own tasks are private. That is the third clause in the tasks read policy. It keys off
+An admin's own tasks are private. That is the last clause in the tasks read policy. It keys off
 the admin role, not off a name, so promoting someone to admin also hides their tasks from
 everyone else.
+
+The one exception is `status = 'review'`. Without it the board punished the handover it was
+built for: a member finishes a job, moves it to Under review and puts it on the admin, and it
+disappears off her own board at the moment she most wants to watch it. So work Under review is
+visible to everyone regardless of whose list it is on. The moment it moves on, to Completed or
+back to In progress, the privacy rule applies again.
+
+That cuts both ways and it is deliberate. Completed work on an admin's list is private, which
+means an admin who finishes someone else's task without handing it back takes it out of their
+sight for good, archive included. Put it back on their name before completing it.
 
 Deleting is admin only, deliberately. Members can do everything except delete, which is what
 stops accidental data loss on a shared board.

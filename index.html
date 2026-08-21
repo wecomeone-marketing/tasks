@@ -240,7 +240,20 @@
     user-select:none;white-space:nowrap}
   .typepick label:hover{border-color:var(--ink-muted)}
   .typepick label.on{background:var(--blue-100);border-color:var(--blue-250);color:var(--ink)}
-  .typepick input{margin:0;accent-color:var(--blue)}
+  /* .field input is width 100%, which a tick box must not inherit */
+  .typepick input[type=checkbox],.steps .step input[type=checkbox]{
+    width:15px;height:15px;flex:none;margin:0;padding:0;border:0;border-radius:0}
+  .typepick input{accent-color:var(--blue)}
+  /* steps, only where a job genuinely has phases */
+  .steps .step{display:flex;align-items:center;gap:9px;padding:6px 0;border-bottom:1px solid var(--grid)}
+  .steps .step input[type=checkbox]{accent-color:var(--good)}
+  .steps .step span{flex:1;font-size:13.5px}
+  .steps .step.done span{color:var(--ink-muted);text-decoration:line-through}
+  .steps .step .drop{border:0;background:none;color:var(--ink-muted);cursor:pointer;font-size:15px;
+    line-height:1;padding:2px 5px;border-radius:6px}
+  .steps .step .drop:hover{background:var(--plane);color:var(--critical)}
+  .steps #stepNew{margin-top:8px}
+  .stepcount{font-size:11.5px;color:var(--ink-muted);margin-left:6px;white-space:nowrap}
   .comments{margin-top:6px;border-top:1px solid var(--grid);padding-top:14px}
   .comment{display:flex;gap:9px;padding:9px 0}
   .comment + .comment{border-top:1px solid var(--grid)}
@@ -561,6 +574,15 @@
       <textarea id="fld-notes" placeholder="Scope and deliverable"></textarea>
     </div>
     <div class="field">
+      <span class="fieldlabel">Steps</span>
+      <button class="btn small" id="addStepsBtn" type="button">Add steps</button>
+      <div class="steps hidden" id="stepsWrap">
+        <div id="stepList"></div>
+        <input id="stepNew" placeholder="Add a step and press enter">
+        <p class="note">Ticking a step records it and nothing else. The status stays yours to set.</p>
+      </div>
+    </div>
+    <div class="field">
       <label for="fld-links">Links</label>
       <textarea id="fld-links" placeholder="One per line. Brief, drive folder, live page" style="min-height:56px"></textarea>
       <div class="linkchips" id="linkChips"></div>
@@ -741,6 +763,7 @@ function fromRow(r){
     id: r.id,
     client: r.client||'', project: r.project||'', title: r.title||'',
     type: r.type||'', assignee: nameOf(r.assignee),
+    steps: Array.isArray(r.steps) ? r.steps : [],
     priority: r.priority, status: r.status,
     date_started: r.date_started||'', due_date: r.due_date||'', date_completed: r.date_completed||'',
     notes: r.notes||'',
@@ -759,6 +782,7 @@ const ROW_FIELDS = {
   project:        v => v,
   title:          v => v,
   type:           v => v,
+  steps:          v => Array.isArray(v) ? v : [],
   assignee:       v => idOf(v),
   priority:       v => v,
   status:         v => v,
@@ -1143,6 +1167,7 @@ function renderTable(rows){
         : '<span style="color:var(--ink-muted)">Unassigned</span>'}</td>
       <td><span class="chip"><span class="dot" style="background:${p.color}"></span>${p.label}</span></td>
       <td><span class="chip"><span class="dot" style="background:${s.color}"></span>${s.label}</span>${
+        stepTally(t) ? `<span class="stepcount">${stepTally(t).done}/${stepTally(t).total}</span>` : ''}${
         t.status==='waiting' && t.waiting_on
           ? `<div style="font-size:11.5px;color:${isStale(t)?'#a52c2c':'var(--ink-muted)'};margin-top:3px">${esc(t.waiting_on)}${waitingDays(t)!==null?', '+waitingDays(t)+'d':''}</div>`
           : ''}</td>
@@ -1159,6 +1184,35 @@ function renderTable(rows){
 /* ============================================================
    7. MODAL
    ============================================================ */
+/* ---------- Steps, optional and inert ----------
+   A step records that a phase is done. It changes nothing else: the status stays
+   something a person sets on purpose. Most tasks never need any.                */
+let TASK_STEPS = [];
+const stepsOf = t => Array.isArray(t && t.steps) ? t.steps : [];
+const stepTally = t => {
+  const s = stepsOf(t);
+  return s.length ? { done: s.filter(x=>x.done).length, total: s.length } : null;
+};
+function renderSteps(){
+  const empty = TASK_STEPS.length === 0;
+  $('#addStepsBtn').classList.toggle('hidden', !empty || STEPS_OPEN);
+  $('#stepsWrap').classList.toggle('hidden', empty && !STEPS_OPEN);
+  $('#stepList').innerHTML = TASK_STEPS.map((s,i)=>
+    `<div class="step ${s.done?'done':''}" data-i="${i}">
+       <input type="checkbox" class="tick"${s.done?' checked':''} aria-label="${esc(s.text)}">
+       <span>${esc(s.text)}</span>
+       <button class="drop" type="button" title="Remove this step" aria-label="Remove ${esc(s.text)}">&times;</button>
+     </div>`).join('');
+}
+let STEPS_OPEN = false;
+function setSteps(t){
+  TASK_STEPS = stepsOf(t).map(s=>({ id:s.id, text:s.text, done:!!s.done }));
+  STEPS_OPEN = false;
+  $('#stepNew').value = '';
+  renderSteps();
+}
+const newStepId = () => Math.random().toString(36).slice(2,9);
+
 function buildTypePick(){
   $('#typePick').innerHTML = TYPES.map(t =>
     `<label><input type="checkbox" value="${esc(t)}">${esc(t)}</label>`).join('');
@@ -1186,6 +1240,7 @@ function openTask(id){
   $('#fld-client').value = t.client;
   $('#fld-project').value = t.project;
   setTypes(t.type);
+  setSteps(t);
   $('#fld-assignee').value = t.assignee;
   $('#fld-status').value = t.status;
   $('#fld-priority').value = t.priority;
@@ -1246,6 +1301,7 @@ async function saveTask(){
     client: $('#fld-client').value.trim(),
     project: $('#fld-project').value.trim(),
     type: getTypes(),
+    steps: TASK_STEPS,
     assignee: $('#fld-assignee').value,
     status: $('#fld-status').value,
     priority: $('#fld-priority').value,
@@ -1927,6 +1983,36 @@ $('#duplicateTask').addEventListener('click', async ()=>{
 });
 
 $('#fld-links').addEventListener('input', renderLinkChips);
+
+/* ---------- Steps ---------- */
+$('#addStepsBtn').addEventListener('click', ()=>{
+  STEPS_OPEN = true;
+  renderSteps();
+  $('#stepNew').focus();
+});
+$('#stepNew').addEventListener('keydown', e=>{
+  if(e.key !== 'Enter') return;
+  e.preventDefault();
+  const text = e.target.value.trim();
+  if(!text) return;
+  TASK_STEPS.push({ id:newStepId(), text, done:false });
+  e.target.value = '';
+  renderSteps();
+  $('#stepNew').focus();
+});
+$('#stepList').addEventListener('change', e=>{
+  const row = e.target.closest('.step');
+  if(!row || !e.target.classList.contains('tick')) return;
+  TASK_STEPS[+row.dataset.i].done = e.target.checked;
+  renderSteps();
+});
+$('#stepList').addEventListener('click', e=>{
+  const btn = e.target.closest('.drop');
+  if(!btn) return;
+  TASK_STEPS.splice(+btn.closest('.step').dataset.i, 1);
+  STEPS_OPEN = true;                 // stay open, they are probably mid tidy up
+  renderSteps();
+});
 
 $('#tArchive').addEventListener('click', e=>{ F.archive=!F.archive; e.currentTarget.dataset.on=String(F.archive); render(); });
 $('#tMine').addEventListener('click', e=>{ F.mine=!F.mine; e.currentTarget.dataset.on=String(F.mine); render(); });

@@ -156,15 +156,21 @@ async function onTaskCreated(task: Record<string, unknown>) {
   return `sent to ${who.email}`;
 }
 
-async function onTaskReassigned(task: Record<string, unknown>) {
+async function onTaskReassigned(task: Record<string, unknown>, actor: string | null) {
   const who = await profile(task.assignee as string | null);
   if (!who?.email) return "no assignee";
+  // taking a task onto your own list is not news to you
+  if (actor && actor === task.assignee) return "took it themselves, skipped";
+
+  const from = await profile(actor);
   await send(
     who.email,
     `Reassigned to you: ${task.title}`,
     shell(
       "A task has been handed to you",
-      "This was on someone else's list and is now on yours.",
+      from?.full_name
+        ? `${esc(from.full_name)} moved this onto your list.`
+        : "This was on someone else's list and is now on yours.",
       taskCard(task),
     ),
   );
@@ -293,7 +299,7 @@ Deno.serve(async (req) => {
     if (table === "tasks" && type === "UPDATE") {
       const results: string[] = [];
       if (record.assignee && old_record && record.assignee !== old_record.assignee) {
-        results.push(await onTaskReassigned(record));
+        results.push(await onTaskReassigned(record, actor ?? null));
       }
       if (old_record && old_record.status !== "review" && record.status === "review") {
         results.push(await onMovedToReview(record, actor ?? null));

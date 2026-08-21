@@ -58,7 +58,7 @@ create table tasks (
   assignee uuid references profiles(id),
   priority text not null default 'medium' check (priority in ('low','medium','high','urgent')),
   status text not null default 'not_started'
-    check (status in ('not_started','in_progress','waiting','blocked','review','done')),
+    check (status in ('not_started','in_progress','review','waiting','done')),
   date_started date,
   due_date date,
   date_completed date,

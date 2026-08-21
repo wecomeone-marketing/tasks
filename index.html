@@ -254,6 +254,16 @@
   .steps .step .drop:hover{background:var(--plane);color:var(--critical)}
   .steps #stepNew{margin-top:8px}
   .stepcount{font-size:11.5px;color:var(--ink-muted);margin-left:6px;white-space:nowrap}
+  /* the client list */
+  .clientlist{text-align:left;max-height:320px;overflow:auto;border:1px solid var(--grid);border-radius:9px}
+  .clientrow{display:flex;align-items:center;gap:10px;padding:8px 11px}
+  .clientrow + .clientrow{border-top:1px solid var(--grid)}
+  .clientrow b{flex:1;font-weight:500;font-size:13.5px}
+  .clientrow .used{font-size:11.5px;color:var(--ink-muted);white-space:nowrap}
+  .clientrow .drop{border:0;background:none;color:var(--ink-muted);cursor:pointer;font-size:16px;
+    line-height:1;padding:2px 6px;border-radius:6px}
+  .clientrow .drop:hover{background:var(--plane);color:var(--critical)}
+  .clientlist .note{padding:12px;margin:0}
   .comments{margin-top:6px;border-top:1px solid var(--grid);padding-top:14px}
   .comment{display:flex;gap:9px;padding:9px 0}
   .comment + .comment{border-top:1px solid var(--grid)}
@@ -420,6 +430,8 @@
           <span id="meRole"></span>
         </div>
         <button id="guideBtn" role="menuitem">Run the guide</button>
+        <div class="sep"></div>
+        <button id="clientsBtn" role="menuitem">Clients</button>
         <div class="sep"></div>
         <button id="exportBtn" role="menuitem">Export a backup</button>
         <button id="importBtn" role="menuitem">Import a backup</button>
@@ -671,6 +683,37 @@
   <button class="btn small" id="bulkClear">Clear</button>
 </div>
 
+<div class="confirm" id="clientSheet">
+  <div class="confirmbox dupbox" role="dialog" aria-modal="true" aria-labelledby="clientTitle">
+    <h2 id="clientTitle">Clients</h2>
+    <p class="note" style="margin:0 0 14px;line-height:1.6">The list the Client box offers you. Removing a name
+      here never touches a task.</p>
+    <div class="clientlist" id="clientRows"></div>
+    <div class="field" style="margin:14px 0 0">
+      <input id="clientNew" placeholder="Add a client and press enter">
+    </div>
+    <div class="confirmrow" style="justify-content:flex-end">
+      <button class="btn" id="clientClose">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="confirm" id="clientKill">
+  <div class="confirmbox" role="alertdialog" aria-modal="true" aria-labelledby="clientKillTitle">
+    <h2 id="clientKillTitle">Remove this client?</h2>
+    <p class="confirmwhat" id="clientKillName"></p>
+    <p class="confirmnote" id="clientKillNote"></p>
+    <div class="field hidden" id="clientMoveWrap" style="text-align:left">
+      <label for="clientMove">Move those tasks to</label>
+      <select id="clientMove"></select>
+    </div>
+    <div class="confirmrow">
+      <button class="btn" id="clientKillCancel">Cancel</button>
+      <button class="btn danger solid" id="clientKillGo">Remove</button>
+    </div>
+  </div>
+</div>
+
 <div class="confirm" id="dupSheet">
   <div class="confirmbox dupbox" role="dialog" aria-modal="true" aria-labelledby="dupTitle">
     <h2 id="dupTitle">Duplicate</h2>
@@ -851,6 +894,30 @@ const Store = {
     const { error } = await SB.from('tasks').insert(rows.map(toRow));
     if(error){ toast('Import failed'); console.error(error); return false; }
     return true;
+  },
+
+  /* The client roster. If the table is not there yet the board carries on with the
+     names it can read off the tasks, so nothing breaks while the SQL is still to run. */
+  async loadClients(){
+    const { data, error } = await SB.from('clients').select('id, name').order('name');
+    if(error){ ROSTER_READY = false; return []; }
+    ROSTER_READY = true;
+    return data || [];
+  },
+  async addClient(name){
+    const { error } = await SB.from('clients').insert({ name });
+    if(error){ toast(/duplicate|unique/i.test(error.message) ? 'That client is already on the list' : 'Could not add'); return false; }
+    return true;
+  },
+  async removeClient(id){
+    const { error } = await SB.from('clients').delete().eq('id', id);
+    if(error){ toast(ME && ME.role==='admin' ? 'Could not remove' : 'Only an admin can remove a client'); return false; }
+    return true;
+  },
+  async moveClient(from, to){
+    const { error } = await SB.from('tasks').update({ client: to }).eq('client', from);
+    if(error){ toast('Could not move those tasks'); console.error(error); return false; }
+    return true;
   }
 };
 
@@ -858,6 +925,8 @@ const Store = {
    3. STATE
    ============================================================ */
 let TASKS = [];
+let CLIENTS = [];            // the roster, rows of {id, name}
+let ROSTER_READY = false;    // false until the clients table answers
 let ME = null;
 let VIEW = 'dashboard';
 // Newest first, so a task you just added or copied is at the top rather than
@@ -1349,8 +1418,15 @@ function fillSelect(el, items, placeholder){
   el.innerHTML = (placeholder?`<option value="">${placeholder}</option>`:'') +
     items.map(i=>`<option value="${esc(i.value)}">${esc(i.label)}</option>`).join('');
 }
+// Names the Client box offers. Once the roster exists it is the roster, plus any name
+// still sitting on a task, so nothing you already have becomes unfilterable.
+function clientNames(){
+  const used = TASKS.map(t=>t.client).filter(Boolean);
+  const all = ROSTER_READY ? CLIENTS.map(c=>c.name).concat(used) : used;
+  return [...new Set(all)].sort((a,b)=>a.localeCompare(b));
+}
 function refreshFilterOptions(){
-  const clients = [...new Set(TASKS.map(t=>t.client))].filter(Boolean).sort();
+  const clients = clientNames();
   const projects = [...new Set(TASKS.map(t=>t.project))].filter(Boolean).sort();
   const keep = (el,v)=>{ el.value = v; };
   const cv=$('#fClient').value;
@@ -1430,6 +1506,7 @@ async function init(){
   $('#importBtn').classList.toggle('hidden', ME.role!=='admin');
 
   TASKS = await Store.list();
+  CLIENTS = await Store.loadClients();
   refreshFilterOptions();
   switchView('dashboard');
 
@@ -1983,6 +2060,88 @@ $('#duplicateTask').addEventListener('click', async ()=>{
 });
 
 $('#fld-links').addEventListener('input', renderLinkChips);
+
+/* ---------- The client list ----------
+   A name on this list is a name the Client box will offer. Removing one is a
+   change to the list, never to a task, unless you ask for the tasks to move.  */
+const clientUse = name => TASKS.filter(t=>t.client===name).length;
+
+function renderClients(){
+  const names = clientNames();
+  const admin = ME && ME.role === 'admin';
+  $('#clientRows').innerHTML = names.length ? names.map(n=>{
+    const n_ = clientUse(n);
+    const onList = ROSTER_READY && CLIENTS.some(c=>c.name===n);
+    return `<div class="clientrow" data-name="${esc(n)}">
+      <b>${esc(n)}</b>
+      <span class="used">${n_ ? n_ + (n_===1?' task':' tasks') : 'no tasks'}${ROSTER_READY && !onList ? ' · not on the list' : ''}</span>
+      ${admin && onList ? `<button class="drop" type="button" title="Remove ${esc(n)}" aria-label="Remove ${esc(n)}">&times;</button>` : ''}
+    </div>`;
+  }).join('') : '<p class="note">No clients yet. Add the first one below.</p>';
+}
+function openClients(){
+  if(!ROSTER_READY){
+    toast('The client list needs its database table first');
+  }
+  renderClients();
+  $('#clientNew').value = '';
+  $('#clientSheet').dataset.open = 'true';
+  setTimeout(()=>$('#clientNew').focus(), 30);
+}
+const closeClients = () => { $('#clientSheet').dataset.open = 'false'; };
+
+let KILLING = null;
+function askRemoveClient(name){
+  const row = CLIENTS.find(c=>c.name===name);
+  if(!row) return;
+  KILLING = row;
+  const n = clientUse(name);
+  $('#clientKillName').textContent = name;
+  $('#clientKillNote').textContent = n
+    ? `${n} ${n===1?'task uses':'tasks use'} this name. Removing it takes the name off the list only. Those tasks keep it unless you move them.`
+    : 'Nothing uses this name. It will simply leave the list.';
+  $('#clientMoveWrap').classList.toggle('hidden', !n);
+  if(n){
+    const others = clientNames().filter(x=>x!==name);
+    fillSelect($('#clientMove'), others.map(x=>({value:x,label:x})), 'Leave them as they are');
+    $('#clientMove').value = '';
+  }
+  $('#clientKill').dataset.open = 'true';
+}
+const closeKill = () => { $('#clientKill').dataset.open='false'; KILLING = null; };
+
+$('#clientsBtn').addEventListener('click', openClients);
+$('#clientClose').addEventListener('click', closeClients);
+$('#clientSheet').addEventListener('click', e=>{ if(e.target.id==='clientSheet') closeClients(); });
+$('#clientRows').addEventListener('click', e=>{
+  const btn = e.target.closest('.drop');
+  if(btn) askRemoveClient(btn.closest('.clientrow').dataset.name);
+});
+$('#clientNew').addEventListener('keydown', async e=>{
+  if(e.key !== 'Enter') return;
+  e.preventDefault();
+  const name = e.target.value.trim();
+  if(!name) return;
+  if(clientNames().some(n=>n.toLowerCase()===name.toLowerCase())){ toast('That client is already on the list'); return; }
+  if(!await Store.addClient(name)) return;
+  CLIENTS = await Store.loadClients();
+  e.target.value = '';
+  renderClients(); refreshFilterOptions();
+  toast(name + ' added');
+});
+$('#clientKillCancel').addEventListener('click', closeKill);
+$('#clientKillGo').addEventListener('click', async ()=>{
+  if(!KILLING) return;
+  const { id, name } = KILLING;
+  const moveTo = $('#clientMoveWrap').classList.contains('hidden') ? '' : $('#clientMove').value;
+  if(moveTo && !await Store.moveClient(name, moveTo)) return;
+  if(!await Store.removeClient(id)) return;
+  closeKill();
+  CLIENTS = await Store.loadClients();
+  if(moveTo) TASKS = await Store.list();
+  renderClients(); refreshFilterOptions(); render();
+  toast(moveTo ? `Moved to ${moveTo} and removed ${name}` : name + ' removed');
+});
 
 /* ---------- Steps ---------- */
 $('#addStepsBtn').addEventListener('click', ()=>{

@@ -316,30 +316,20 @@ stops accidental data loss on a shared board.
 The service role key must never appear in `index.html` or anywhere in this repo. It bypasses
 every permission rule. It belongs in the SQL editor and in Edge Function secrets only.
 
-## Steps inside a task
+## The steps column, kept but not used
 
-Some jobs have phases. A month of social is built as a grid first and scheduled after,
-and before this the board had no way to say half. `steps-setup.sql` adds a `steps` column
-to `tasks`, a jsonb array of `{id, text, done}`, with a check constraint so a bad write
-cannot put something other than a list in there.
+`steps-setup.sql` added a `steps` column to `tasks`, a jsonb array of `{id, text, done}`.
+The board had a checklist on the task panel for a while, so that a month of social could
+show the grid built and the scheduling still open.
 
-Steps sit on the task rather than in a table of their own. That keeps them atomic with the
-task, needs no second query and no second security policy. The cost is that two people
-editing the steps of the same task at the same moment would have the last save win, which
-is not worth a table for a team of two.
+That checklist was removed. Nothing in `index.html` reads or writes `steps` any more.
 
-Three things in the page hang off it:
+The column is still there on purpose. It holds the steps that were entered before the
+feature came out, so nothing was thrown away, and it costs nothing to leave in place. If
+the checklist ever comes back the data is waiting for it. If you are sure it never will,
+`alter table tasks drop column steps;` and delete `steps-setup.sql` from the repo.
 
-- The task panel has a Steps list, add with enter, tick to complete, drag to reorder.
-- Cards and table rows show a count, and only when a task actually has steps.
-- Saving a task as Completed while a step is unticked opens a dialog rather than going
-  through quietly. That is the case this was built for.
-
-`TYPE_STEPS` near the top of the script holds the default lists per task type. Social Media
-is the only one filled in. Choosing that type on a new task drops the steps in, and they are
-ordinary steps from that moment, editable and deletable. Add a type to that object and it
-gains the same behaviour, no other change needed.
-
-Steps also feed the Progress by client panel. Where a task has them, the count of ticked
-steps is used instead of the status estimate, whichever reads further along. Nothing reaches
-a hundred until the task is marked Completed.
+Task type is a plain text column holding one or more types, comma separated, for example
+`Graphic Design, Social Media`. The card offers them as checkboxes. A filter on a type
+matches a task when that type is one of several, so anything tagged partly SEO still shows
+up under SEO.

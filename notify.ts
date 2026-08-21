@@ -4,7 +4,7 @@
 // Handles four jobs:
 //   1. a task is created            -> email the assignee
 //   2. a task is reassigned         -> email the new assignee
-//   2b. a task moves into Review     -> email the admins, it is waiting on them
+//   2b. a task moves into Under review -> email the admins, it is waiting on them
 //   3. a comment is posted          -> email the task assignee
 //   4. a daily run each morning     -> email assignee and admins about tasks due today
 //
@@ -30,8 +30,8 @@ const db = createClient(
 const STATUS_LABEL: Record<string, string> = {
   not_started: "Not started",
   in_progress: "In progress",
-  blocked: "Blocked",
-  review: "Review",
+  review: "Under review",
+  waiting: "Waiting",
   done: "Completed",
 };
 
@@ -184,7 +184,7 @@ async function onMovedToReview(task: Record<string, unknown>, actor: string | nu
       `Ready for review: ${task.title}`,
       shell(
         "A task is waiting on you",
-        `${esc(mover?.full_name ?? who?.full_name ?? "Someone")} moved this into Review.`,
+        `${esc(mover?.full_name ?? who?.full_name ?? "Someone")} moved this into Under review.`,
         taskCard(task),
       ),
     );

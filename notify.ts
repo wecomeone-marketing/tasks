@@ -161,6 +161,9 @@ async function onTaskReassigned(task: Record<string, unknown>, actor: string | n
   if (!who?.email) return "no assignee";
   // taking a task onto your own list is not news to you
   if (actor && actor === task.assignee) return "took it themselves, skipped";
+  // handing back finished work is filing, not an assignment. It appears in their
+  // archive the moment it is saved, which is all the notice anyone needs.
+  if (task.status === "done") return "already finished, no email";
 
   const from = await profile(actor);
   await send(

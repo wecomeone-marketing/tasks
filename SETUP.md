@@ -240,6 +240,9 @@ begin
                ),
     body    := jsonb_build_object(
                  'type',       tg_op,
+                 -- who is actually doing this, so the function can avoid
+                 -- emailing someone about a change they made themselves
+                 'actor',      auth.uid(),
                  'table',      tg_table_name,
                  'record',     to_jsonb(new),
                  'old_record', case when tg_op = 'UPDATE' then to_jsonb(old) else null end

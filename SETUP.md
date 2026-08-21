@@ -326,7 +326,12 @@ back to In progress, the privacy rule applies again.
 
 That cuts both ways and it is deliberate. Completed work on an admin's list is private, which
 means an admin who finishes someone else's task without handing it back takes it out of their
-sight for good, archive included. Put it back on their name before completing it.
+sight, archive included. Putting their name back on it returns it, before or after completing,
+and it lands straight in their archive.
+
+Handing back finished work sends no email. A reassignment where the task is already Completed
+is filing rather than an assignment, and the person gets it in their archive the moment it is
+saved, which is notice enough. That check lives in `onTaskReassigned` in `notify.ts`.
 
 Deleting is admin only, deliberately. Members can do everything except delete, which is what
 stops accidental data loss on a shared board.

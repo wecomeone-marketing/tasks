@@ -173,7 +173,7 @@
   }
 
   /* Board */
-  .board{display:grid;grid-template-columns:repeat(6,minmax(190px,1fr));gap:10px;overflow-x:auto;padding-bottom:8px}
+  .board{display:grid;grid-template-columns:repeat(5,minmax(190px,1fr));gap:10px;overflow-x:auto;padding-bottom:8px}
   .col{background:var(--surface);border:1px solid var(--grid);border-radius:var(--radius);display:flex;flex-direction:column;min-height:180px}
   .col > header{padding:11px 13px;border-bottom:1px solid var(--grid);display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600}
   .col > header .n{margin-left:auto;color:var(--ink-muted);font-weight:500;font-variant-numeric:tabular-nums}
@@ -695,12 +695,11 @@ const URL_HASH = window.location.hash || '';
 const SB = window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey);
 
 const STATUSES = [
-  { key:'not_started', label:'Not started', color:'#898781' },
-  { key:'in_progress', label:'In progress', color:'#2a78d6' },
-  { key:'waiting',     label:'Waiting',     color:'#ec835a' },
-  { key:'blocked',     label:'Blocked',     color:'#d03b3b' },
-  { key:'review',      label:'Review',      color:'#fab219' },
-  { key:'done',        label:'Completed',   color:'#0ca30c' }
+  { key:'not_started', label:'Not started',  color:'#898781' },
+  { key:'in_progress', label:'In progress',  color:'#2a78d6' },
+  { key:'review',      label:'Under review', color:'#fab219' },
+  { key:'waiting',     label:'Waiting',      color:'#ec835a' },
+  { key:'done',        label:'Completed',    color:'#0ca30c' }
 ];
 const PRIORITIES = [
   { key:'low',    label:'Low',    color:'#898781' },
@@ -919,7 +918,7 @@ function kpiTile(label, value, sub, color){
 // How far along a client's work is. Status is the only signal the board has, so
 // each status carries a weight. It estimates position in the pipeline, not effort.
 const PROGRESS_WEIGHT = {
-  not_started: 0, blocked: .25, in_progress: .5, waiting: .5, review: .85, done: 1
+  not_started: 0, in_progress: .5, waiting: .5, review: .85, done: 1
 };
 
 // The one thing a client's row should lead with, worst first. rank drives the sort,
@@ -934,10 +933,8 @@ function clientHeadline(list){
   // "1 of 1" is noise, so the count only appears when there is more than one task
   const some = k => total > 1 ? `${n(k)} of ${total}` : '';
 
-  if(n('blocked'))
-    return { rank:0, color:c('blocked'), label:'Blocked', detail: some('blocked') };
   if(overdue.length)
-    return { rank:1, color:c('blocked'), label:'Overdue', detail: total > 1 ? `${overdue.length} past due` : '' };
+    return { rank:1, color:'#d03b3b', label:'Overdue', detail: total > 1 ? `${overdue.length} past due` : '' };
   if(stale.length)
     return { rank:2, color:c('waiting'), label:'Waiting', detail:`${Math.max(...stale.map(waitingDays))} days, worth a chase` };
   if(n('waiting')){
@@ -945,7 +942,7 @@ function clientHeadline(list){
     return { rank:3, color:c('waiting'), label:'Waiting', detail: who ? `on ${who}` : some('waiting') };
   }
   if(n('review'))
-    return { rank:4, color:c('review'), label:'In review', detail:`${n('review')} to approve` };
+    return { rank:4, color:c('review'), label:'Under review', detail:`${n('review')} to approve` };
   if(n('in_progress'))
     return { rank:5, color:c('in_progress'), label:'In progress', detail: some('in_progress') };
   if(n('done') === total)
@@ -964,10 +961,9 @@ function renderDashboard(rows){
   $('#kpis').innerHTML =
     kpiTile('Open tasks', open.length, counts.not_started + ' not started') +
     kpiTile('In progress', counts.in_progress, 'Active work', '#2a78d6') +
-    kpiTile('Blocked', counts.blocked, 'Needs a decision', '#d03b3b') +
     kpiTile('Overdue', overdue, dueSoon + ' due within 7 days', '#d03b3b') +
     kpiTile('Waiting on others', counts.waiting, rows.filter(isStale).length + ' over a week', '#ec835a') +
-    kpiTile('In review', counts.review, 'Waiting on approval', '#fab219') +
+    kpiTile('Under review', counts.review, 'Waiting on approval', '#fab219') +
     kpiTile('Completed this month', doneThisMonth, 'Across all clients', '#0ca30c');
 
   // Progress by client. One row, one client, one plain English state.
@@ -999,8 +995,8 @@ function renderDashboard(rows){
       <span class="pct">${e.pct}%</span>
     </div>`).join('') +
     `<p class="note" style="margin-top:12px">Whatever needs you sits at the top.
-      The percentage comes from status, not hours: not started nothing, blocked a quarter,
-      in progress or waiting half, in review most of the way, completed all of it.</p>`
+      The percentage comes from status, not hours: not started nothing, in progress or waiting
+      half, under review most of the way, completed all of it.</p>`
    : '<div class="empty">No tasks match the current filters.</div>';
 
   // Workload by assignee: open tasks only, single hue, with overdue count called out
@@ -1020,7 +1016,7 @@ function renderDashboard(rows){
    : '<div class="empty">No tasks match the current filters.</div>';
 
   // Needs attention
-  const att = rows.filter(t=> isOverdue(t) || t.status==='blocked' || isStale(t) || (t.priority==='urgent' && t.status!=='done'))
+  const att = rows.filter(t=> isOverdue(t) || isStale(t) || (t.priority==='urgent' && t.status!=='done'))
     .sort((a,b)=> (a.due_date||'9999').localeCompare(b.due_date||'9999'));
   $('#attention').innerHTML = att.length ? `<table style="width:100%"><tbody>${att.map(t=>{
     const s = statusOf(t.status);
@@ -1033,7 +1029,7 @@ function renderDashboard(rows){
         isStale(t) ? ('With ' + esc(t.waiting_on||'someone') + ' ' + waitingDays(t) + 'd')
                    : (t.due_date ? ('Due '+fmtDate(t.due_date)) : 'No date')}</td>
     </tr>`;
-  }).join('')}</tbody></table>` : '<div class="empty">Nothing overdue, blocked, urgent or sitting too long with someone else. Good place to be.</div>';
+  }).join('')}</tbody></table>` : '<div class="empty">Nothing overdue, urgent or sitting too long with someone else. Good place to be.</div>';
 }
 
 function cardHTML(t){
@@ -1501,11 +1497,11 @@ const STEPS = [
 
   { el:'#attention', view:'dashboard', place:'above',
     title:'Needs attention',
-    body:`<p>The only panel that asks something of you. Anything overdue, blocked, urgent, or sitting too long with someone else lands here.</p>
+    body:`<p>The only panel that asks something of you. Anything overdue, urgent, or sitting too long with someone else lands here.</p>
           <p>If this is empty, you are in good shape.</p>` },
 
   { el:'#board', view:'board', place:'below',
-    title:'Six columns, six meanings',
+    title:'Five columns, five meanings',
     body:`<p>The one people get wrong: <b>In progress means us. Waiting means them.</b></p>
           <p>If a contractor or a client has it, that is Waiting, and the board starts counting the days.</p>` },
 

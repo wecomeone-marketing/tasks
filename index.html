@@ -120,6 +120,10 @@
     border:1px solid var(--ring);background:var(--surface);padding:7px 10px;border-radius:8px;
   }
   .filters input[type=search]{min-width:230px}
+  /* on means on, the same black the toggles use */
+  .filters select[data-on="true"],.filters input[type=search][data-on="true"]{
+    background:var(--brand-ink);color:#fff;border-color:var(--brand-ink);font-weight:600}
+  .filters input[type=search][data-on="true"]::placeholder{color:rgba(255,255,255,.6)}
   .toggle{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--ring);background:var(--surface);
     padding:6px 11px;border-radius:999px;cursor:pointer;user-select:none}
   .toggle[data-on="true"]{background:var(--brand-ink);color:#fff;border-color:var(--brand-ink)}
@@ -1003,6 +1007,16 @@ const filtered = () => TASKS.filter(t => matchesFilters(t) && (showingCompleted(
 /* ============================================================
    6. RENDER
    ============================================================ */
+// A filter that is doing something should look different from one that is not,
+// otherwise a board filtered down to one client looks identical to the whole board.
+function markFilters(){
+  ['fClient','fAssignee','fStatus','fPriority','fType'].forEach(id=>{
+    const el = $('#'+id);
+    el.dataset.on = String(!!el.value);
+  });
+  $('#q').dataset.on = String(!!$('#q').value.trim());
+}
+
 function render(){
   const rows = filtered();
   const openTotal = TASKS.filter(t=>!isArchived(t)).length;
@@ -1010,6 +1024,7 @@ function render(){
     ? rows.length + ' completed'
     : rows.length + ' of ' + openTotal + ' open';
   $('#tArchive').dataset.on = String(showingCompleted());
+  markFilters();
   if(VIEW==='dashboard') renderDashboard(forDashboard());
   if(VIEW==='board') renderBoard(rows);
   if(VIEW==='table') renderTable(rows);
@@ -1091,7 +1106,7 @@ function renderDashboard(rows){
       .map(s=>{ const n = list.filter(t=>t.status===s.key).length; return n ? `${n} ${s.label.toLowerCase()}` : ''; })
       .filter(Boolean).join(', ');
     return { name, h, pct, total:list.length, spread };
-  }).sort((a,b)=> a.h.rank - b.h.rank || a.name.localeCompare(b.name));
+  }).sort((a,b)=> a.name.localeCompare(b.name));   // alphabetical, so a client is where you expect
 
   $('#byClient').innerHTML = entries.length ? entries.map(e=>`
     <div class="crow" title="${esc(e.name)}: ${e.total} task${e.total>1?'s':''}, ${esc(e.spread)}">
@@ -1103,7 +1118,7 @@ function renderDashboard(rows){
       <span class="meter"><i style="width:${e.pct}%;background:${e.h.color}"></i></span>
       <span class="pct">${e.pct}%</span>
     </div>`).join('') +
-    `<p class="note" style="margin-top:12px">Whatever needs you sits at the top.
+    `<p class="note" style="margin-top:12px">Listed A to Z, colour tells you what needs you.
       The percentage comes from status, not hours: not started nothing, in progress or waiting
       half, under review most of the way, completed all of it.</p>`
    : '<div class="empty">No tasks match the current filters.</div>';

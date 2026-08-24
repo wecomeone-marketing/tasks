@@ -256,6 +256,11 @@
   .steps .step .drop{border:0;background:none;color:var(--ink-muted);cursor:pointer;font-size:15px;
     line-height:1;padding:2px 5px;border-radius:6px}
   .steps .step .drop:hover{background:var(--plane);color:var(--critical)}
+  /* drag to reorder, the same way a board card moves between columns */
+  .steps .step .handle{cursor:grab;color:var(--ink-muted);font-size:12px;letter-spacing:-2px;
+    line-height:1;flex:none;user-select:none}
+  .steps .step.dragging{opacity:.4}
+  .steps .step.over{border-top:2px solid var(--blue)}
   .steps #stepNew{margin-top:8px}
   .stepcount{font-size:11.5px;color:var(--ink-muted);margin-left:6px;white-space:nowrap}
   /* the client list */
@@ -1282,13 +1287,15 @@ function renderSteps(){
   $('#addStepsBtn').classList.toggle('hidden', !empty || STEPS_OPEN);
   $('#stepsWrap').classList.toggle('hidden', empty && !STEPS_OPEN);
   $('#stepList').innerHTML = TASK_STEPS.map((s,i)=>
-    `<div class="step ${s.done?'done':''}" data-i="${i}">
+    `<div class="step ${s.done?'done':''}" data-i="${i}" draggable="true">
+       <span class="handle" title="Drag to reorder" aria-hidden="true">&#8942;&#8942;</span>
        <input type="checkbox" class="tick"${s.done?' checked':''} aria-label="${esc(s.text)}">
        <span>${esc(s.text)}</span>
        <button class="drop" type="button" title="Remove this step" aria-label="Remove ${esc(s.text)}">&times;</button>
      </div>`).join('');
 }
 let STEPS_OPEN = false;
+let dragStepI = null;   // index of the step currently being dragged, or null
 function setSteps(t){
   TASK_STEPS = stepsOf(t).map(s=>({ id:s.id, text:s.text, done:!!s.done }));
   STEPS_OPEN = false;
@@ -2186,6 +2193,41 @@ $('#stepList').addEventListener('click', e=>{
   TASK_STEPS.splice(+btn.closest('.step').dataset.i, 1);
   STEPS_OPEN = true;                 // stay open, they are probably mid tidy up
   renderSteps();
+});
+// Drag a step onto another to move it there, the same way a card moves between
+// board columns. Dropping on a row puts the dragged step in that row's slot.
+$('#stepList').addEventListener('dragstart', e=>{
+  const row = e.target.closest('.step');
+  if(!row) return;
+  dragStepI = +row.dataset.i;
+  e.dataTransfer.effectAllowed = 'move';
+  row.classList.add('dragging');
+});
+$('#stepList').addEventListener('dragover', e=>{
+  const row = e.target.closest('.step');
+  if(!row || dragStepI===null) return;
+  e.preventDefault();
+  if(!row.classList.contains('over')){
+    $$('#stepList .step.over').forEach(r=>r.classList.remove('over'));
+    row.classList.add('over');
+  }
+});
+$('#stepList').addEventListener('drop', e=>{
+  const row = e.target.closest('.step');
+  if(!row || dragStepI===null) return;
+  e.preventDefault();
+  const to = +row.dataset.i;
+  if(to !== dragStepI){
+    const [moved] = TASK_STEPS.splice(dragStepI, 1);
+    TASK_STEPS.splice(to, 0, moved);
+    STEPS_OPEN = true;
+  }
+  dragStepI = null;
+  renderSteps();
+});
+$('#stepList').addEventListener('dragend', ()=>{
+  dragStepI = null;
+  $$('#stepList .step').forEach(r=>r.classList.remove('dragging','over'));
 });
 
 $('#tArchive').addEventListener('click', e=>{ F.archive=!F.archive; e.currentTarget.dataset.on=String(F.archive); render(); });

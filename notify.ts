@@ -55,6 +55,18 @@ function esc(s: unknown): string {
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
 }
 
+// The templates below are written with generous indentation for readability,
+// which leaves the layout whitespace glued into odd-length lines once a row
+// or two of table cells run together (e.g. "</td></tr><tr>"). Long, uneven
+// lines are exactly what pushes an email's line-wrapping to break in an
+// awkward spot, which is how a stray "=20" was leaking into inboxes as
+// visible text. Squeezing out the whitespace we added for readability (never
+// whitespace inside real content, like a comment or a note) keeps every
+// email short and evenly shaped so it doesn't need mid-line wrapping.
+function tidy(html: string): string {
+  return html.replace(/>\s+</g, "><").trim();
+}
+
 // ---------------------------------------------------------------- email shell
 
 function shell(heading: string, intro: string, body: string): string {
@@ -112,7 +124,7 @@ async function send(to: string, subject: string, html: string) {
       from: `${FROM_NAME} <${SMTP_USER}>`,
       to,
       subject,
-      html,
+      html: tidy(html),
       content: "This message needs an email client that can show formatting.",
     });
   } finally {

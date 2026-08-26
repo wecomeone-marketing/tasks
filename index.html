@@ -783,11 +783,12 @@ const taskIdFromHash = () => { const m = URL_HASH.match(/task=([^&]+)/); return 
 const SB = window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey);
 
 const STATUSES = [
-  { key:'not_started', label:'Not started',  color:'#898781' },
-  { key:'in_progress', label:'In progress',  color:'#2a78d6' },
-  { key:'review',      label:'Under review', color:'#fab219' },
-  { key:'waiting',     label:'Waiting',      color:'#ec835a' },
-  { key:'done',        label:'Completed',    color:'#0ca30c' }
+  { key:'not_started',      label:'Not started',      color:'#898781' },
+  { key:'in_progress',      label:'In progress',      color:'#2a78d6' },
+  { key:'review',           label:'Under review',     color:'#fab219' },
+  { key:'review_completed', label:'Review completed', color:'#1a9e8f' },
+  { key:'waiting',          label:'Waiting',          color:'#ec835a' },
+  { key:'done',             label:'Completed',        color:'#0ca30c' }
 ];
 const PRIORITIES = [
   { key:'low',    label:'Low',    color:'#898781' },
@@ -1050,7 +1051,7 @@ function kpiTile(label, value, sub, color){
 // How far along a client's work is. Status is the only signal the board has, so
 // each status carries a weight. It estimates position in the pipeline, not effort.
 const PROGRESS_WEIGHT = {
-  not_started: 0, in_progress: .5, waiting: .5, review: .85, done: 1
+  not_started: 0, in_progress: .5, waiting: .5, review: .85, review_completed: .95, done: 1
 };
 
 // The one thing a client's row should lead with, worst first. rank drives the sort,
@@ -1073,13 +1074,15 @@ function clientHeadline(list){
     const who = (list.find(t=>t.status==='waiting') || {}).waiting_on;
     return { rank:3, color:c('waiting'), label:'Waiting', detail: who ? `on ${who}` : some('waiting') };
   }
+  if(n('review_completed'))
+    return { rank:4, color:c('review_completed'), label:'Review completed', detail:`${n('review_completed')} to wrap up` };
   if(n('review'))
-    return { rank:4, color:c('review'), label:'Under review', detail:`${n('review')} to approve` };
+    return { rank:5, color:c('review'), label:'Under review', detail:`${n('review')} to approve` };
   if(n('in_progress'))
-    return { rank:5, color:c('in_progress'), label:'In progress', detail: some('in_progress') };
+    return { rank:6, color:c('in_progress'), label:'In progress', detail: some('in_progress') };
   if(n('done') === total)
-    return { rank:7, color:c('done'), label:'Completed', detail: total > 1 ? `all ${total}` : '' };
-  return { rank:6, color:c('not_started'), label:'Not started', detail: some('not_started') };
+    return { rank:8, color:c('done'), label:'Completed', detail: total > 1 ? `all ${total}` : '' };
+  return { rank:7, color:c('not_started'), label:'Not started', detail: some('not_started') };
 }
 
 function renderDashboard(rows){
@@ -1096,6 +1099,7 @@ function renderDashboard(rows){
     kpiTile('Overdue', overdue, dueSoon + ' due within 7 days', '#d03b3b') +
     kpiTile('Waiting on others', counts.waiting, rows.filter(isStale).length + ' over a week', '#ec835a') +
     kpiTile('Under review', counts.review, 'Waiting on approval', '#fab219') +
+    kpiTile('Review completed', counts.review_completed, 'Ready to wrap up', '#1a9e8f') +
     kpiTile('Completed this month', doneThisMonth, 'Across all clients', '#0ca30c');
 
   // Progress by client. One row, one client, one plain English state.

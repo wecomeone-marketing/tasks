@@ -1,10 +1,12 @@
 // Wecomeone Task Board, email notifications
 // Prepared by Wecomeone Marketing And Comms
 //
-// Handles four jobs:
+// Handles six jobs:
 //   1. a task is created            -> email the assignee
 //   2. a task is reassigned         -> email the new assignee
-//   2b. a task moves into Under review -> email the admins, it is waiting on them
+//   2b. a task moves into Under review     -> email the admins, it is waiting on them
+//   2c. a task moves into Review completed -> email the assignee, they're clear to finish it
+//   2d. a task moves out of review some other way -> email the assignee, it needs another pass
 //   3. a comment is posted          -> email the task assignee
 //   4. a daily run each morning     -> email assignee and admins about tasks due today
 //
@@ -31,6 +33,7 @@ const STATUS_LABEL: Record<string, string> = {
   not_started: "Not started",
   in_progress: "In progress",
   review: "Under review",
+  review_completed: "Review completed",
   waiting: "Waiting",
   done: "Completed",
 };
@@ -224,6 +227,46 @@ async function onMovedToReview(task: Record<string, unknown>, actor: string | nu
   return sent.length ? `sent to ${sent.join(", ")}` : "no admin to tell";
 }
 
+async function onReviewApproved(task: Record<string, unknown>, actor: string | null) {
+  const who = await profile(task.assignee as string | null);
+  if (!who?.email) return "no assignee";
+  // approved it themselves (an admin who is also the assignee), no need to tell them
+  if (actor && actor === task.assignee) return "approved by themselves, skipped";
+
+  const mover = await profile(actor);
+  await send(
+    who.email,
+    `Review complete: ${task.title}`,
+    shell(
+      "You're clear to finish this up",
+      `${esc(mover?.full_name ?? "Someone")} reviewed this with no more comments. It's ready for you to complete.`,
+      taskCard(task),
+      { url: taskLink(task), ...OPEN_TASK },
+    ),
+  );
+  return `sent to ${who.email}`;
+}
+
+async function onSentBackFromReview(task: Record<string, unknown>, actor: string | null) {
+  const who = await profile(task.assignee as string | null);
+  if (!who?.email) return "no assignee";
+  // sent it back to themselves, no need to tell them
+  if (actor && actor === task.assignee) return "sent back by themselves, skipped";
+
+  const mover = await profile(actor);
+  await send(
+    who.email,
+    `Back to you: ${task.title}`,
+    shell(
+      "A task is back on your list",
+      `${esc(mover?.full_name ?? "Someone")} reviewed this and sent it back for another pass.`,
+      taskCard(task),
+      { url: taskLink(task), ...OPEN_TASK },
+    ),
+  );
+  return `sent to ${who.email}`;
+}
+
 async function onComment(comment: Record<string, unknown>) {
   const { data: task } = await db.from("tasks")
     .select("*").eq("id", comment.task_id as string).maybeSingle();
@@ -329,6 +372,16 @@ Deno.serve(async (req) => {
       }
       if (old_record && old_record.status !== "review" && record.status === "review") {
         results.push(await onMovedToReview(record, actor ?? null));
+      }
+      // leaving review, to the same assignee (a reassignment at the same time is
+      // already covered by onTaskReassigned above) -- approved into Review completed
+      // is good news, anything else (back to In progress etc, not Completed) needs another pass
+      if (old_record && old_record.status === "review" && record.status !== "review" && record.assignee === old_record.assignee) {
+        if (record.status === "review_completed") {
+          results.push(await onReviewApproved(record, actor ?? null));
+        } else if (record.status !== "done") {
+          results.push(await onSentBackFromReview(record, actor ?? null));
+        }
       }
       return new Response(results.length ? results.join(" | ") : "nothing worth an email", { status: 200 });
     }

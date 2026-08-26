@@ -69,7 +69,12 @@ function tidy(html: string): string {
 
 // ---------------------------------------------------------------- email shell
 
-function shell(heading: string, intro: string, body: string): string {
+// Most of these emails are about exactly one task. The button jumps straight to
+// its card instead of the Dashboard, unless the caller says otherwise (the due-today
+// digest covers several tasks at once, so it sends people to the board itself).
+function shell(heading: string, intro: string, body: string, cta?: { url: string; label: string }): string {
+  const ctaUrl = cta?.url ?? BOARD_URL;
+  const ctaLabel = cta?.label ?? "Open the board";
   return `<!doctype html><html><body style="margin:0;padding:24px;background:#f9f9f7;
     font-family:system-ui,-apple-system,'Segoe UI',sans-serif;color:#0b0b0b">
     <div style="max-width:560px;margin:0 auto;background:#fcfcfb;border:1px solid #e1e0d9;
@@ -80,13 +85,15 @@ function shell(heading: string, intro: string, body: string): string {
       <p style="margin:0 0 20px;font-size:14px;color:#52514e;line-height:1.5">${intro}</p>
       ${body}
       <p style="margin:24px 0 0">
-        <a href="${BOARD_URL}" style="display:inline-block;background:#0b0b0b;color:#fff;
+        <a href="${ctaUrl}" style="display:inline-block;background:#0b0b0b;color:#fff;
            text-decoration:none;padding:10px 18px;border-radius:8px;font-size:14px;
-           font-weight:500">Open the board</a>
+           font-weight:500">${esc(ctaLabel)}</a>
       </p>
     </div>
   </body></html>`;
 }
+const taskLink = (task: Record<string, unknown>) => `${BOARD_URL}/#task=${task.id}`;
+const OPEN_TASK = { label: "Open the task" };
 
 function taskCard(t: Record<string, unknown>): string {
   const rows: [string, string][] = [
@@ -163,6 +170,7 @@ async function onTaskCreated(task: Record<string, unknown>) {
       "A task has been assigned to you",
       `${esc(from?.full_name ?? "Someone")} added this to your list.`,
       taskCard(task),
+      { url: taskLink(task), ...OPEN_TASK },
     ),
   );
   return `sent to ${who.email}`;
@@ -187,6 +195,7 @@ async function onTaskReassigned(task: Record<string, unknown>, actor: string | n
         ? `${esc(from.full_name)} moved this onto your list.`
         : "This was on someone else's list and is now on yours.",
       taskCard(task),
+      { url: taskLink(task), ...OPEN_TASK },
     ),
   );
   return `sent to ${who.email}`;
@@ -207,6 +216,7 @@ async function onMovedToReview(task: Record<string, unknown>, actor: string | nu
         "A task is waiting on you",
         `${esc(mover?.full_name ?? who?.full_name ?? "Someone")} moved this into Under review.`,
         taskCard(task),
+        { url: taskLink(task), ...OPEN_TASK },
       ),
     );
     sent.push(admin.email);
@@ -233,6 +243,7 @@ async function onComment(comment: Record<string, unknown>) {
       `${author?.full_name ?? "Someone"} commented`,
       "On a task assigned to you.",
       quote + taskCard(task),
+      { url: taskLink(task), ...OPEN_TASK },
     ),
   );
   return `sent to ${owner.email}`;

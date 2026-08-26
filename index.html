@@ -245,24 +245,9 @@
   .typepick label:hover{border-color:var(--ink-muted)}
   .typepick label.on{background:var(--blue-100);border-color:var(--blue-250);color:var(--ink)}
   /* .field input is width 100%, which a tick box must not inherit */
-  .typepick input[type=checkbox],.steps .step input[type=checkbox]{
+  .typepick input[type=checkbox]{
     width:15px;height:15px;flex:none;margin:0;padding:0;border:0;border-radius:0}
   .typepick input{accent-color:var(--blue)}
-  /* steps, only where a job genuinely has phases */
-  .steps .step{display:flex;align-items:center;gap:9px;padding:6px 0;border-bottom:1px solid var(--grid)}
-  .steps .step input[type=checkbox]{accent-color:var(--good)}
-  .steps .step span{flex:1;font-size:13.5px}
-  .steps .step.done span{color:var(--ink-muted);text-decoration:line-through}
-  .steps .step .drop{border:0;background:none;color:var(--ink-muted);cursor:pointer;font-size:15px;
-    line-height:1;padding:2px 5px;border-radius:6px}
-  .steps .step .drop:hover{background:var(--plane);color:var(--critical)}
-  /* drag to reorder, the same way a board card moves between columns */
-  .steps .step .handle{cursor:grab;color:var(--ink-muted);font-size:12px;letter-spacing:-2px;
-    line-height:1;flex:none;user-select:none}
-  .steps .step.dragging{opacity:.4}
-  .steps .step.over{border-top:2px solid var(--blue)}
-  .steps #stepNew{margin-top:8px}
-  .stepcount{font-size:11.5px;color:var(--ink-muted);margin-left:6px;white-space:nowrap}
   /* the client list */
   .clientlist{text-align:left;max-height:320px;overflow:auto;border:1px solid var(--grid);border-radius:9px}
   .clientrow{display:flex;align-items:center;gap:10px;padding:8px 11px}
@@ -556,6 +541,10 @@
       <span class="fieldlabel">Task type</span>
       <div class="typepick" id="typePick" role="group" aria-label="Task type"></div>
     </div>
+    <div class="field">
+      <label for="fld-notes">Brief</label>
+      <textarea id="fld-notes" placeholder="Scope and deliverable"></textarea>
+    </div>
     <div class="three">
       <div class="field">
         <label for="fld-assignee">Assignee</label>
@@ -590,25 +579,6 @@
       <datalist id="waitingList"></datalist>
       <p class="note" id="waitingNote"></p>
     </div>
-    <div class="field">
-      <label for="fld-notes">Brief</label>
-      <textarea id="fld-notes" placeholder="Scope and deliverable"></textarea>
-    </div>
-    <div class="field">
-      <span class="fieldlabel">Steps</span>
-      <button class="btn small" id="addStepsBtn" type="button">Add steps</button>
-      <div class="steps hidden" id="stepsWrap">
-        <div id="stepList"></div>
-        <input id="stepNew" placeholder="Add a step and press enter">
-        <p class="note">Ticking a step records it and nothing else. The status stays yours to set.</p>
-      </div>
-    </div>
-    <div class="field">
-      <label for="fld-links">Links</label>
-      <textarea id="fld-links" placeholder="One per line. Brief, drive folder, live page" style="min-height:56px"></textarea>
-      <div class="linkchips" id="linkChips"></div>
-    </div>
-
     <div class="comments">
       <label style="display:block;font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-muted);font-weight:600">Comments</label>
       <div id="commentList"></div>
@@ -617,6 +587,11 @@
         <button class="btn" id="addCommentBtn">Post</button>
       </div>
       <p class="note" id="auditLine"></p>
+    </div>
+    <div class="field">
+      <label for="fld-links">Links</label>
+      <textarea id="fld-links" placeholder="One per line. Brief, drive folder, live page" style="min-height:56px"></textarea>
+      <div class="linkchips" id="linkChips"></div>
     </div>
   </div>
   <footer>
@@ -727,8 +702,7 @@
   <div class="confirmbox dupbox" role="dialog" aria-modal="true" aria-labelledby="dupTitle">
     <h2 id="dupTitle">Duplicate</h2>
     <p class="note" style="margin:0 0 16px;line-height:1.6">The copies arrive as Not started with no due date,
-      every step unticked, belonging to whoever had the original. Comments stay behind with the month that is
-      finished.</p>
+      belonging to whoever had the original. Comments stay behind with the month that is finished.</p>
     <div class="field">
       <label for="dupFind">Rename, optional</label>
       <div class="two">
@@ -783,12 +757,11 @@ const taskIdFromHash = () => { const m = URL_HASH.match(/task=([^&]+)/); return 
 const SB = window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey);
 
 const STATUSES = [
-  { key:'not_started',      label:'Not started',      color:'#898781' },
-  { key:'in_progress',      label:'In progress',      color:'#2a78d6' },
-  { key:'review',           label:'Under review',     color:'#fab219' },
-  { key:'review_completed', label:'Review completed', color:'#1a9e8f' },
-  { key:'waiting',          label:'Waiting',          color:'#ec835a' },
-  { key:'done',             label:'Completed',        color:'#0ca30c' }
+  { key:'not_started', label:'Not started',  color:'#898781' },
+  { key:'in_progress', label:'In progress',  color:'#2a78d6' },
+  { key:'review',      label:'Under review', color:'#fab219' },
+  { key:'waiting',     label:'Waiting',      color:'#ec835a' },
+  { key:'done',        label:'Completed',    color:'#0ca30c' }
 ];
 const PRIORITIES = [
   { key:'low',    label:'Low',    color:'#898781' },
@@ -819,7 +792,6 @@ function fromRow(r){
     id: r.id,
     client: r.client||'', project: r.project||'', title: r.title||'',
     type: r.type||'', assignee: nameOf(r.assignee),
-    steps: Array.isArray(r.steps) ? r.steps : [],
     priority: r.priority, status: r.status,
     date_started: r.date_started||'', due_date: r.due_date||'', date_completed: r.date_completed||'',
     notes: r.notes||'',
@@ -838,7 +810,6 @@ const ROW_FIELDS = {
   project:        v => v,
   title:          v => v,
   type:           v => v,
-  steps:          v => Array.isArray(v) ? v : [],
   assignee:       v => idOf(v),
   priority:       v => v,
   status:         v => v,
@@ -1051,7 +1022,7 @@ function kpiTile(label, value, sub, color){
 // How far along a client's work is. Status is the only signal the board has, so
 // each status carries a weight. It estimates position in the pipeline, not effort.
 const PROGRESS_WEIGHT = {
-  not_started: 0, in_progress: .5, waiting: .5, review: .85, review_completed: .95, done: 1
+  not_started: 0, in_progress: .5, waiting: .5, review: .85, done: 1
 };
 
 // The one thing a client's row should lead with, worst first. rank drives the sort,
@@ -1074,15 +1045,13 @@ function clientHeadline(list){
     const who = (list.find(t=>t.status==='waiting') || {}).waiting_on;
     return { rank:3, color:c('waiting'), label:'Waiting', detail: who ? `on ${who}` : some('waiting') };
   }
-  if(n('review_completed'))
-    return { rank:4, color:c('review_completed'), label:'Review completed', detail:`${n('review_completed')} to wrap up` };
   if(n('review'))
-    return { rank:5, color:c('review'), label:'Under review', detail:`${n('review')} to approve` };
+    return { rank:4, color:c('review'), label:'Under review', detail:`${n('review')} to approve` };
   if(n('in_progress'))
-    return { rank:6, color:c('in_progress'), label:'In progress', detail: some('in_progress') };
+    return { rank:5, color:c('in_progress'), label:'In progress', detail: some('in_progress') };
   if(n('done') === total)
-    return { rank:8, color:c('done'), label:'Completed', detail: total > 1 ? `all ${total}` : '' };
-  return { rank:7, color:c('not_started'), label:'Not started', detail: some('not_started') };
+    return { rank:7, color:c('done'), label:'Completed', detail: total > 1 ? `all ${total}` : '' };
+  return { rank:6, color:c('not_started'), label:'Not started', detail: some('not_started') };
 }
 
 function renderDashboard(rows){
@@ -1099,7 +1068,6 @@ function renderDashboard(rows){
     kpiTile('Overdue', overdue, dueSoon + ' due within 7 days', '#d03b3b') +
     kpiTile('Waiting on others', counts.waiting, rows.filter(isStale).length + ' over a week', '#ec835a') +
     kpiTile('Under review', counts.review, 'Waiting on approval', '#fab219') +
-    kpiTile('Review completed', counts.review_completed, 'Ready to wrap up', '#1a9e8f') +
     kpiTile('Completed this month', doneThisMonth, 'Across all clients', '#0ca30c');
 
   // Progress by client. One row, one client, one plain English state.
@@ -1263,7 +1231,6 @@ function renderTable(rows){
         : '<span style="color:var(--ink-muted)">Unassigned</span>'}</td>
       <td><span class="chip"><span class="dot" style="background:${p.color}"></span>${p.label}</span></td>
       <td><span class="chip"><span class="dot" style="background:${s.color}"></span>${s.label}</span>${
-        stepTally(t) ? `<span class="stepcount">${stepTally(t).done}/${stepTally(t).total}</span>` : ''}${
         t.status==='waiting' && t.waiting_on
           ? `<div style="font-size:11.5px;color:${isStale(t)?'#a52c2c':'var(--ink-muted)'};margin-top:3px">${esc(t.waiting_on)}${waitingDays(t)!==null?', '+waitingDays(t)+'d':''}</div>`
           : ''}</td>
@@ -1280,37 +1247,6 @@ function renderTable(rows){
 /* ============================================================
    7. MODAL
    ============================================================ */
-/* ---------- Steps, optional and inert ----------
-   A step records that a phase is done. It changes nothing else: the status stays
-   something a person sets on purpose. Most tasks never need any.                */
-let TASK_STEPS = [];
-const stepsOf = t => Array.isArray(t && t.steps) ? t.steps : [];
-const stepTally = t => {
-  const s = stepsOf(t);
-  return s.length ? { done: s.filter(x=>x.done).length, total: s.length } : null;
-};
-function renderSteps(){
-  const empty = TASK_STEPS.length === 0;
-  $('#addStepsBtn').classList.toggle('hidden', !empty || STEPS_OPEN);
-  $('#stepsWrap').classList.toggle('hidden', empty && !STEPS_OPEN);
-  $('#stepList').innerHTML = TASK_STEPS.map((s,i)=>
-    `<div class="step ${s.done?'done':''}" data-i="${i}" draggable="true">
-       <span class="handle" title="Drag to reorder" aria-hidden="true">&#8942;&#8942;</span>
-       <input type="checkbox" class="tick"${s.done?' checked':''} aria-label="${esc(s.text)}">
-       <span>${esc(s.text)}</span>
-       <button class="drop" type="button" title="Remove this step" aria-label="Remove ${esc(s.text)}">&times;</button>
-     </div>`).join('');
-}
-let STEPS_OPEN = false;
-let dragStepI = null;   // index of the step currently being dragged, or null
-function setSteps(t){
-  TASK_STEPS = stepsOf(t).map(s=>({ id:s.id, text:s.text, done:!!s.done }));
-  STEPS_OPEN = false;
-  $('#stepNew').value = '';
-  renderSteps();
-}
-const newStepId = () => Math.random().toString(36).slice(2,9);
-
 function buildTypePick(){
   $('#typePick').innerHTML = TYPES.map(t =>
     `<label><input type="checkbox" value="${esc(t)}">${esc(t)}</label>`).join('');
@@ -1338,7 +1274,6 @@ function openTask(id){
   $('#fld-client').value = t.client;
   $('#fld-project').value = t.project;
   setTypes(t.type);
-  setSteps(t);
   $('#fld-assignee').value = t.assignee;
   $('#fld-status').value = t.status;
   $('#fld-priority').value = t.priority;
@@ -1399,7 +1334,6 @@ async function saveTask(){
     client: $('#fld-client').value.trim(),
     project: $('#fld-project').value.trim(),
     type: getTypes(),
-    steps: TASK_STEPS,
     assignee: $('#fld-assignee').value,
     status: $('#fld-status').value,
     priority: $('#fld-priority').value,
@@ -2180,71 +2114,6 @@ $('#clientKillGo').addEventListener('click', async ()=>{
   if(moveTo) TASKS = await Store.list();
   renderClients(); refreshFilterOptions(); render();
   toast(moveTo ? `Moved to ${moveTo} and removed ${name}` : name + ' removed');
-});
-
-/* ---------- Steps ---------- */
-$('#addStepsBtn').addEventListener('click', ()=>{
-  STEPS_OPEN = true;
-  renderSteps();
-  $('#stepNew').focus();
-});
-$('#stepNew').addEventListener('keydown', e=>{
-  if(e.key !== 'Enter') return;
-  e.preventDefault();
-  const text = e.target.value.trim();
-  if(!text) return;
-  TASK_STEPS.push({ id:newStepId(), text, done:false });
-  e.target.value = '';
-  renderSteps();
-  $('#stepNew').focus();
-});
-$('#stepList').addEventListener('change', e=>{
-  const row = e.target.closest('.step');
-  if(!row || !e.target.classList.contains('tick')) return;
-  TASK_STEPS[+row.dataset.i].done = e.target.checked;
-  renderSteps();
-});
-$('#stepList').addEventListener('click', e=>{
-  const btn = e.target.closest('.drop');
-  if(!btn) return;
-  TASK_STEPS.splice(+btn.closest('.step').dataset.i, 1);
-  STEPS_OPEN = true;                 // stay open, they are probably mid tidy up
-  renderSteps();
-});
-// Drag a step onto another to move it there, the same way a card moves between
-// board columns. Dropping on a row puts the dragged step in that row's slot.
-$('#stepList').addEventListener('dragstart', e=>{
-  const row = e.target.closest('.step');
-  if(!row) return;
-  dragStepI = +row.dataset.i;
-  e.dataTransfer.effectAllowed = 'move';
-  row.classList.add('dragging');
-});
-$('#stepList').addEventListener('dragover', e=>{
-  const row = e.target.closest('.step');
-  if(!row || dragStepI===null) return;
-  e.preventDefault();
-  if(!row.classList.contains('over')){
-    $$('#stepList .step.over').forEach(r=>r.classList.remove('over'));
-    row.classList.add('over');
-  }
-});
-$('#stepList').addEventListener('drop', e=>{
-  const row = e.target.closest('.step');
-  if(!row || dragStepI===null) return;
-  e.preventDefault();
-  const to = +row.dataset.i;
-  if(to !== dragStepI){
-    const [moved] = TASK_STEPS.splice(dragStepI, 1);
-    TASK_STEPS.splice(to, 0, moved);
-    STEPS_OPEN = true;
-  }
-  dragStepI = null;
-  renderSteps();
-});
-$('#stepList').addEventListener('dragend', ()=>{
-  dragStepI = null;
-  $$('#stepList .step').forEach(r=>r.classList.remove('dragging','over'));
 });
 
 $('#tArchive').addEventListener('click', e=>{ F.archive=!F.archive; e.currentTarget.dataset.on=String(F.archive); render(); });

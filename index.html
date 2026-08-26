@@ -777,6 +777,9 @@ if(!window.supabase){
   throw new Error('supabase-js failed to load');
 }
 const URL_HASH = window.location.hash || '';
+// An email links here as #task=<id> so clicking it lands straight on that task's
+// card instead of the Dashboard. Read once at load, since init() runs after sign-in.
+const taskIdFromHash = () => { const m = URL_HASH.match(/task=([^&]+)/); return m ? decodeURIComponent(m[1]) : null; };
 const SB = window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey);
 
 const STATUSES = [
@@ -1530,7 +1533,17 @@ async function init(){
   TASKS = await Store.list();
   CLIENTS = await Store.loadClients();
   refreshFilterOptions();
-  switchView('dashboard');
+
+  // A task link from an email takes you straight to that task's card, on the Table,
+  // instead of the Dashboard. A stale or already-handled link just falls through.
+  const wantedTaskId = taskIdFromHash();
+  if(wantedTaskId) history.replaceState(null, '', window.location.pathname);
+  if(wantedTaskId && TASKS.some(t=>t.id===wantedTaskId)){
+    switchView('table');
+    openTask(wantedTaskId);
+  } else {
+    switchView('dashboard');
+  }
 
   $('#booting').classList.add('hidden');
   $('#login').classList.add('hidden');

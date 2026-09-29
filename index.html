@@ -1973,12 +1973,28 @@ $('#confirmYes').addEventListener('click', async ()=>{
 });
 $('#addCommentBtn').addEventListener('click', async ()=>{
   const body = $('#newComment').value.trim();
-  if(!body || !EDITING) { if(!EDITING) toast('Save the task first'); return; }
+  if(!body) return;
+  const payload = buildTaskPayload();
+  if(!payload.title){ toast('Give the task a name'); return; }
+
   // Whatever is sitting in the form (due date, links, etc.) needs to be saved
   // before the comment goes out, otherwise the comment email reports what is
-  // still in the database, not what is on screen.
-  const pending = buildTaskPayload();
-  if(pending.title) await Store.update(EDITING.id, pending);
+  // still in the database, not what is on screen. On a brand new task (never
+  // saved yet) there is nothing to update, so create it first -- that used to
+  // silently refuse the comment with an easy-to-miss toast instead.
+  if(EDITING){
+    await Store.update(EDITING.id, payload);
+  } else {
+    const created = await Store.create(payload);
+    if(!created) return;
+    EDITING = created;
+    $('#modalTitle').textContent = 'Edit task';
+    $('#duplicateTask').classList.remove('hidden');
+    $('#deleteTask').classList.toggle('hidden', ME.role!=='admin');
+    $('#auditLine').textContent = `Created by ${created.created_by||'unknown'} · last updated ${new Date(created.updated_at||Date.now()).toLocaleString('en-GB')}`;
+    refreshFilterOptions();
+  }
+
   const ok = await Store.addComment(EDITING.id, body);
   if(!ok) return;
   TASKS = await Store.list();

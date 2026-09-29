@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en" data-theme="light">
 <head>
@@ -1328,7 +1329,11 @@ function renderComments(t){
     </div>`).join('') : '<p class="note">No comments yet.</p>';
 }
 
-async function saveTask(){
+// Reads the form into a task payload. Shared by Save task and Post comment, so
+// posting a comment always saves whatever is currently in the fields first --
+// otherwise a comment can email out with a due date or link that only exists
+// on screen and not yet in the database.
+function buildTaskPayload(){
   const payload = {
     title: $('#fld-title').value.trim(),
     client: $('#fld-client').value.trim(),
@@ -1344,7 +1349,6 @@ async function saveTask(){
     links: $('#fld-links').value.trim(),
     waiting_on: $('#fld-waiting').value.trim()
   };
-  if(!payload.title){ toast('Give the task a name'); return; }
 
   // A date in the Completed field means the task is completed, whatever the dropdown says.
   const prevCompleted = EDITING ? (EDITING.date_completed || '') : '';
@@ -1360,6 +1364,13 @@ async function saveTask(){
   // start the clock the moment a task is parked with someone, stop it when it comes back
   const prevSince = EDITING ? (EDITING.waiting_since || '') : '';
   payload.waiting_since = payload.status === 'waiting' ? (prevSince || todayISO()) : '';
+
+  return payload;
+}
+
+async function saveTask(){
+  const payload = buildTaskPayload();
+  if(!payload.title){ toast('Give the task a name'); return; }
 
   if(EDITING){
     await Store.update(EDITING.id, payload);
@@ -1963,6 +1974,11 @@ $('#confirmYes').addEventListener('click', async ()=>{
 $('#addCommentBtn').addEventListener('click', async ()=>{
   const body = $('#newComment').value.trim();
   if(!body || !EDITING) { if(!EDITING) toast('Save the task first'); return; }
+  // Whatever is sitting in the form (due date, links, etc.) needs to be saved
+  // before the comment goes out, otherwise the comment email reports what is
+  // still in the database, not what is on screen.
+  const pending = buildTaskPayload();
+  if(pending.title) await Store.update(EDITING.id, pending);
   const ok = await Store.addComment(EDITING.id, body);
   if(!ok) return;
   TASKS = await Store.list();
